@@ -27,7 +27,7 @@ The hostile cases included forged provider/context provenance, invented context 
 | P1 | Imported records could forge provider provenance, human-confirmed model claims, claim histories, assistant ordering, or context excerpts while remaining individually schema-valid. | Import now validates the complete cross-record graph, reconstructs append-only claim revision chains, pairs human reviews one-to-one with semantic transitions, binds context excerpts and evidence, and rejects branches, gaps, duplicates, deleted/crisis records, and unsupported projections. |
 | P1 | Raw portable insertion and MCP context construction could bypass the runtime crisis/overclaim/dependency safety gates. | Import replays user-input or generated-output safety checks by source actor, and MCP context construction performs the same pre-retrieval crisis/third-party routing as CLI. Regression tests cover both bypasses. |
 | P1 | An imported `credential_ref` could alias an existing OS keyring entry on the same device, implicitly carrying provider authority even though the artifact contains no secret. | Import disables every provider profile, rotates any credential reference into an import-specific empty namespace, and revalidates the graph. Provider use requires an explicit new/reconfigured profile. |
-| P1 | Assistant transcript output could be persisted at a lower sensitivity than the query or included context, or appended with ambiguous/equal timestamps. | Persistence and import require strict turn ordering, a preceding user turn matching the packet query, and assistant sensitivity at least the maximum of session, query, and every context item. |
+| P1 | A session request or assistant transcript could be persisted at a lower sensitivity than its session/query/context, or appended with ambiguous/equal timestamps. | Core rejects session egress when the query downgrades the session sensitivity or the provider does not trust it. Persistence and import require strict turn ordering, a preceding user turn matching the packet query, and assistant sensitivity at least the maximum of session, query, and every context item. |
 | P2 | MCP schemas advertised looser limits than runtime and could accept high-sensitivity proposals. | All ten tools now have matching runtime and JSON Schema string/list bounds. Proposal sensitivity is restricted to `normal` or `private`; administrative and human-review verbs remain absent. |
 | P2 | Provider protocols accepted missing/partial terminal states and did not consistently bound redirects, proxies, time, body size, or attacker-controlled output schemas. | The HTTP layer has fixed connect/request/body limits, no redirects/proxies, HTTPS-only cloud mode, loopback-only local mode, strict successful stop states, bounded schemas, local schema revalidation, and redacted errors/debug output. |
 | P2 | Recovery/setup errors could leave partial recovery JSON, restored databases, WAL/SHM files, or world-readable creation windows. | Exclusive file guards remove partial artifacts and sidecars on failure; new vault, backup, export, restore, and recovery files are atomically created owner-only on Unix. |
@@ -48,7 +48,7 @@ node scripts/validate-assets.mjs
 
 cargo test --workspace --all-features
   5 CLI tests
-  34 Core tests
+  35 Core tests
   7 schema/fixture/runtime contract tests
   5 MCP tests
   10 provider protocol tests

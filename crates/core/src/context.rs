@@ -4,7 +4,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    Actor, ActorKind, Capability, DomainError, EntityId, EntityKind, Sensitivity, Validate,
+    Actor, ActorKind, Capability, DomainError, EntityId, EntityKind, ProviderProfile,
+    ReflectionSession, Sensitivity, SessionStatus, Validate,
     validation::{validate_method_id, validate_text},
 };
 
@@ -209,6 +210,28 @@ impl ContextPacket {
         }
         if self.requires_approval && self.approved_at.is_none() {
             return Err(DomainError::InvalidValue("context.approved_at"));
+        }
+        Ok(())
+    }
+
+    /// Bind a provider packet to an active session without allowing sensitivity downgrades.
+    pub fn authorize_session_egress(
+        &self,
+        session: &ReflectionSession,
+        profile: &ProviderProfile,
+    ) -> Result<(), DomainError> {
+        self.authorize_egress()?;
+        session.validate()?;
+        profile.validate()?;
+        if session.status != SessionStatus::Active
+            || session.method != self.method
+            || self.query_sensitivity < session.sensitivity
+            || !profile.enabled
+            || profile.id != self.provider_profile_id
+            || profile.model != self.model
+            || !profile.trusts(session.sensitivity)
+        {
+            return Err(DomainError::InvalidValue("context.session_egress"));
         }
         Ok(())
     }
@@ -597,6 +620,53 @@ mod tests {
         );
         packet.mark_dispatched(Actor::system(), Utc::now())?;
         assert!(packet.dispatched_at.is_some());
+        Ok(())
+    }
+
+    #[test]
+    fn session_egress_cannot_downgrade_the_session_sensitivity() -> Result<(), Box<dyn Error>> {
+        let now = Utc::now();
+        let provider_id = EntityId::new(EntityKind::Provider);
+        let packet = ContextBuilder::new(1)?.build(
+            Actor::user(),
+            "Synthetic purpose",
+            "free-reflection@1.0.0",
+            provider_id.clone(),
+            "synthetic-model",
+            "Synthetic query",
+            Sensitivity::Normal,
+            Vec::new(),
+            now,
+        )?;
+        let session = ReflectionSession::user_started(
+            "free-reflection@1.0.0",
+            None,
+            Sensitivity::HighlySensitive,
+            now,
+        );
+        let profile = ProviderProfile::new(
+            "Synthetic local",
+            crate::ProviderKind::LocalHttp,
+            "http://127.0.0.1:11434/v1",
+            "synthetic-model",
+            crate::PrivacyKind::Local,
+            crate::ProviderCapabilities {
+                streaming: false,
+                tool_use: false,
+                json_schema: false,
+                vision: false,
+                context_limit: Some(8_192),
+            },
+            BTreeSet::from([Sensitivity::Normal]),
+            None,
+            None,
+            now,
+        );
+
+        assert_eq!(
+            packet.authorize_session_egress(&session, &profile),
+            Err(DomainError::InvalidValue("context.session_egress"))
+        );
         Ok(())
     }
 }
