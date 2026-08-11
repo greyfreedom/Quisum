@@ -20,7 +20,7 @@ use quisum_core::{
     EvidenceGrade, ExperimentRisk, MethodError, MethodPackage, OFFICIAL_METHOD_IDS,
     OpenQuestionStatus, PrivacyKind, ProviderCapabilities, ProviderKind, ProviderProfile,
     ReflectionSession, ReviewDecision, ReviewRequest, SafetyEngine, Sensitivity, SessionMessage,
-    SessionStatus, Source, Validate,
+    Source, Validate,
 };
 use quisum_providers::{
     GenerationRequest, HttpProvider, ModelProvider as _, OutputContract, ProviderCredential,
@@ -1405,16 +1405,7 @@ async fn provider_chat(
         vault.create_session(Actor::user(), &session)?;
         session
     };
-    if session.status != SessionStatus::Active || session.method != packet.method {
-        return Err(CliError::Invalid(
-            "chat requires an active session using the same versioned method",
-        ));
-    }
-    if session.sensitivity == Sensitivity::LocalOnly {
-        return Err(CliError::Invalid(
-            "a local_only session cannot be sent to any provider",
-        ));
-    }
+    packet.authorize_session_egress(&session, &profile)?;
     let user_sensitivity = session.sensitivity.max(packet.query_sensitivity);
     let assistant_sensitivity = packet
         .items
