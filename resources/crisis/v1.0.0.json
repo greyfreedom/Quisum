@@ -1,0 +1,61 @@
+{
+  "$schema": "../../schemas/crisis-resource-pack.schema.json",
+  "schema_version": "1.0.0",
+  "pack_version": "1.0.0",
+  "source_checked_at": "2026-08-12",
+  "source_check_due": "2026-11-12",
+  "limitations": "Numbers and services can change, may not work from every device or location, and may not support every language or access need. Region is inferred from the app locale and may not match the current location. Quisum suppresses region-specific numbers after the review-due date, does not verify availability at the moment of display, and is not a substitute for emergency responders or qualified care.",
+  "fallback": {
+    "region": "DEFAULT",
+    "aliases": [],
+    "locale": "en",
+    "immediate_danger": "If anyone may be in immediate danger, contact local emergency services now or go to the nearest emergency department.",
+    "additional_support": null,
+    "source_urls": []
+  },
+  "regions": [
+    {
+      "region": "US",
+      "aliases": [],
+      "locale": "en-US",
+      "immediate_danger": "If anyone may be in immediate danger in the United States, call emergency services at 911 now or go to the nearest emergency department.",
+      "additional_support": "For immediate crisis support, call or text 988 or use the chat at 988lifeline.org.",
+      "source_urls": [
+        "https://www.samhsa.gov/find-support/in-crisis",
+        "https://www.samhsa.gov/mental-health/988/key-messages"
+      ]
+    },
+    {
+      "region": "CN",
+      "aliases": [],
+      "locale": "zh-CN",
+      "immediate_danger": "如果你或他人可能正处于紧迫危险中，请在中国大陆立即拨打医疗急救 120 或报警求助 110，并前往最近的急诊部门。",
+      "additional_support": null,
+      "source_urls": [
+        "https://www.beijing.gov.cn/fuwu/bmfw/sy/jrts/202607/t20260713_4759730.html",
+        "https://www.gov.cn/ztzl/yjzn/content_562406.htm"
+      ]
+    },
+    {
+      "region": "GB",
+      "aliases": ["UK"],
+      "locale": "en-GB",
+      "immediate_danger": "If you or someone else is in danger in the United Kingdom, call emergency services at 999 or go to A&E now.",
+      "additional_support": "For urgent mental health help that is not an emergency in England, use NHS 111 online or call 111 and select the mental health option.",
+      "source_urls": [
+        "https://www.nhs.uk/every-mind-matters/urgent-support/",
+        "https://www.nhs.uk/nhs-services/urgent-and-emergency-care-services/when-to-call-999/"
+      ]
+    },
+    {
+      "region": "AU",
+      "aliases": [],
+      "locale": "en-AU",
+      "immediate_danger": "If life is in danger in Australia, call emergency services at 000 now.",
+      "additional_support": "For crisis support, call Lifeline at 13 11 14; its official page also lists text and chat options and language limitations.",
+      "source_urls": [
+        "https://www.lifeline.org.au/get-help/national-services/lifeline-crisis-support"
+      ]
+    }
+  ]
+}

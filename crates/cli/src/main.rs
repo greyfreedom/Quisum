@@ -16,11 +16,11 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use directories::ProjectDirs;
 use futures_util::StreamExt as _;
 use quisum_core::{
-    Actor, BehavioralExperiment, Claim, ClaimKind, ContextBuilder, DomainError, EntityId, Event,
-    EvidenceGrade, ExperimentRisk, MethodError, MethodPackage, OFFICIAL_METHOD_IDS,
-    OpenQuestionStatus, PrivacyKind, ProviderCapabilities, ProviderKind, ProviderProfile,
-    ReflectionSession, ReviewDecision, ReviewRequest, SafetyEngine, Sensitivity, SessionMessage,
-    Source, Validate,
+    Actor, BehavioralExperiment, Claim, ClaimKind, ContextBuilder, CrisisResourcePack, DomainError,
+    EntityId, Event, EvidenceGrade, ExperimentRisk, MethodError, MethodPackage,
+    OFFICIAL_METHOD_IDS, OpenQuestionStatus, PrivacyKind, ProviderCapabilities, ProviderKind,
+    ProviderProfile, ReflectionSession, ReviewDecision, ReviewRequest, SafetyEngine, SafetyRoute,
+    Sensitivity, SessionMessage, Source, Validate,
 };
 use quisum_providers::{
     GenerationRequest, HttpProvider, ModelProvider as _, OutputContract, ProviderCredential,
@@ -57,6 +57,10 @@ struct Cli {
     /// Root containing declarative method packages.
     #[arg(long, global = true, value_name = "PATH")]
     methods: Option<PathBuf>,
+
+    /// Optional ISO region or locale used only for local crisis-resource selection.
+    #[arg(long, global = true)]
+    region: Option<String>,
 
     /// Emit compact JSON (streaming chat emits NDJSON events).
     #[arg(long, global = true)]
@@ -695,6 +699,8 @@ enum CliError {
     Io(#[from] io::Error),
     #[error("{0}")]
     Invalid(&'static str),
+    #[error("{0}")]
+    Safety(String),
 }
 
 #[derive(Debug)]
@@ -705,6 +711,7 @@ struct RuntimeConfig {
     json: bool,
     no_keyring: bool,
     unlock_passphrase_stdin: bool,
+    region: Option<String>,
 }
 
 #[tokio::main]
@@ -731,6 +738,7 @@ async fn execute(cli: Cli) -> Result<(), CliError> {
         json: cli.json,
         no_keyring: cli.no_keyring,
         unlock_passphrase_stdin: cli.unlock_passphrase_stdin,
+        region: cli.region,
     };
 
     match cli.command {
@@ -855,9 +863,10 @@ fn event_command(
                     &args.actions,
                     &args.short_term_outcomes,
                     &args.long_term_outcomes,
+                    &args.topics,
                 ],
             );
-            require_safe_input(&safety_text)?;
+            require_safe_input(&safety_text, config.region.as_deref())?;
             let now = Utc::now();
             let mut event = Event::user_confirmed(
                 args.title,
@@ -921,7 +930,10 @@ fn claim_command(
 ) -> Result<(), CliError> {
     match command {
         ClaimCommand::Propose(args) => {
-            require_safe_input(&args.statement)?;
+            require_safe_input(
+                &joined_user_text(&args.statement, [&args.contexts, &args.alternatives]),
+                config.region.as_deref(),
+            )?;
             let now = Utc::now();
             let mut claim = Claim::proposal(
                 args.kind.into(),
@@ -957,6 +969,13 @@ fn claim_command(
             print_value(config, &json!({"claim": claim, "revisions": revisions}))
         }
         ClaimCommand::Review(args) => {
+            require_safe_input(
+                &joined_optional_user_text([
+                    args.edited_statement.as_deref(),
+                    args.note.as_deref(),
+                ]),
+                config.region.as_deref(),
+            )?;
             let commit = vault.review_claim(
                 Actor::user(),
                 &parse_id(&args.id)?,
@@ -1041,6 +1060,10 @@ fn session_command(
 ) -> Result<(), CliError> {
     match command {
         SessionCommand::Start(args) => {
+            require_safe_input(
+                &joined_optional_user_text([args.title.as_deref()]),
+                config.region.as_deref(),
+            )?;
             let package = MethodPackage::load(&config.methods, &args.method)?;
             let session = ReflectionSession::user_started(
                 package.identifier(),
@@ -1130,7 +1153,10 @@ fn context_command(
 ) -> Result<(), CliError> {
     match command {
         ContextCommand::Build(args) => {
-            require_safe_input(&args.query)?;
+            require_safe_input(
+                &joined_user_text(&args.query, [std::slice::from_ref(&args.purpose)]),
+                config.region.as_deref(),
+            )?;
             let profile_id = parse_id(&args.provider)?;
             let profile = vault
                 .get_provider_profile(Actor::user(), &profile_id)?
@@ -1396,6 +1422,10 @@ async fn provider_chat(
             .get_session(Actor::user(), &parse_id(identifier)?)?
             .ok_or(VaultError::NotFoundRecord)?
     } else {
+        require_safe_input(
+            &joined_optional_user_text([args.title.as_deref()]),
+            config.region.as_deref(),
+        )?;
         let session = ReflectionSession::user_started(
             packet.method.clone(),
             args.title,
@@ -1519,7 +1549,7 @@ fn experiment_command(
 ) -> Result<(), CliError> {
     match command {
         ExperimentCommand::Propose(args) => {
-            require_safe_input(&joined_user_text(
+            let mut safety_text = joined_user_text(
                 &args.title,
                 [
                     std::slice::from_ref(&args.hypothesis),
@@ -1527,7 +1557,9 @@ fn experiment_command(
                     std::slice::from_ref(&args.action),
                     std::slice::from_ref(&args.stop_condition),
                 ],
-            ))?;
+            );
+            append_user_text(&mut safety_text, args.expected_result.as_deref());
+            require_safe_input(&safety_text, config.region.as_deref())?;
             let mut experiment = BehavioralExperiment::proposal(
                 args.title,
                 args.hypothesis,
@@ -1560,6 +1592,13 @@ fn experiment_command(
             print_value(config, &experiment)
         }
         ExperimentCommand::Complete(args) => {
+            require_safe_input(
+                &joined_optional_user_text([
+                    Some(args.actual_result.as_str()),
+                    Some(args.learning.as_str()),
+                ]),
+                config.region.as_deref(),
+            )?;
             let experiment = vault.complete_experiment(
                 Actor::user(),
                 &parse_id(&args.id)?,
@@ -1747,14 +1786,34 @@ fn provider_adapter(
     HttpProvider::new(profile, credential).map_err(Into::into)
 }
 
-fn require_safe_input(input: &str) -> Result<(), CliError> {
+fn require_safe_input(input: &str, region: Option<&str>) -> Result<(), CliError> {
     let decision = SafetyEngine.screen_user_input(input);
-    if decision.allow_persistence {
-        Ok(())
-    } else {
-        Err(CliError::Invalid(
-            "safety routing paused identity analysis and durable persistence; seek immediate local emergency help if anyone may be in imminent danger",
-        ))
+    match decision.route {
+        SafetyRoute::Continue if decision.allow_persistence => Ok(()),
+        SafetyRoute::Crisis => {
+            let message = match CrisisResourcePack::embedded() {
+                Ok(pack) => {
+                    let guidance = pack.guidance(region);
+                    if guidance.source_urls.is_empty() {
+                        guidance.assistant_response
+                    } else {
+                        format!(
+                            "{} Sources: {}",
+                            guidance.assistant_response,
+                            guidance.source_urls.join(", ")
+                        )
+                    }
+                }
+                Err(_) => "Quisum is not an emergency service. Stop identity analysis. If anyone may be in immediate danger, contact local emergency services now and contact a trusted person who can help without putting themselves in danger.".to_owned(),
+            };
+            Err(CliError::Safety(message))
+        }
+        SafetyRoute::RefuseThirdPartyProfiling => Err(CliError::Safety(
+            "Quisum refuses covert profiling of another person; reflect on your own observations, needs, boundaries, and choices instead.".to_owned(),
+        )),
+        SafetyRoute::Pause | SafetyRoute::Continue => Err(CliError::Safety(
+            "Safety routing paused identity analysis and durable persistence.".to_owned(),
+        )),
     }
 }
 
@@ -1765,6 +1824,23 @@ fn joined_user_text<const N: usize>(head: &str, lists: [&[String]; N]) -> String
         value.push_str(item);
     }
     value
+}
+
+fn joined_optional_user_text<const N: usize>(values: [Option<&str>; N]) -> String {
+    let mut joined = String::new();
+    for value in values.into_iter().flatten() {
+        append_user_text(&mut joined, Some(value));
+    }
+    joined
+}
+
+fn append_user_text(joined: &mut String, value: Option<&str>) {
+    if let Some(value) = value {
+        if !joined.is_empty() {
+            joined.push('\n');
+        }
+        joined.push_str(value);
+    }
 }
 
 fn parse_id(value: &str) -> Result<EntityId, CliError> {

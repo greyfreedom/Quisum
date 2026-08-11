@@ -12,11 +12,11 @@ use std::{
 use chrono::{DateTime, Utc};
 use directories::ProjectDirs;
 use quisum_core::{
-    Actor, BehavioralExperiment, Claim, ClaimKind, ContextBuilder, DomainError, EntityId, Event,
-    EvidenceGrade, ExperimentRisk, MethodError, MethodPackage, OFFICIAL_METHOD_IDS,
-    OpenQuestionStatus, PrivacyKind, ProviderCapabilities, ProviderKind, ProviderProfile,
-    ReflectionSession, ReviewDecision, ReviewRequest, SafetyEngine, Sensitivity, SessionMessage,
-    Source, Validate,
+    Actor, BehavioralExperiment, Claim, ClaimKind, ContextBuilder, CrisisGuidance,
+    CrisisResourcePack, DomainError, EntityId, Event, EvidenceGrade, ExperimentRisk, MethodError,
+    MethodPackage, OFFICIAL_METHOD_IDS, OpenQuestionStatus, PrivacyKind, ProviderCapabilities,
+    ProviderKind, ProviderProfile, ReflectionSession, ReviewDecision, ReviewRequest, SafetyEngine,
+    SafetyRoute, Sensitivity, SessionMessage, Source, Validate,
 };
 use quisum_providers::{
     GenerationRequest, HttpProvider, ModelProvider as _, OutputContract, ProviderCredential,
@@ -63,6 +63,8 @@ impl DesktopState {
 struct CommandError {
     code: String,
     message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    crisis_guidance: Option<Box<CrisisGuidance>>,
 }
 
 impl CommandError {
@@ -70,6 +72,7 @@ impl CommandError {
         Self {
             code: code.to_owned(),
             message: message.to_owned(),
+            crisis_guidance: None,
         }
     }
 
@@ -80,6 +83,14 @@ impl CommandError {
     fn locked() -> Self {
         Self::new("vault_locked", "Unlock the encrypted vault to continue.")
     }
+
+    fn crisis(guidance: CrisisGuidance) -> Self {
+        Self {
+            code: "crisis_route".to_owned(),
+            message: guidance.assistant_response.clone(),
+            crisis_guidance: Some(Box::new(guidance)),
+        }
+    }
 }
 
 impl From<DomainError> for CommandError {
@@ -87,7 +98,7 @@ impl From<DomainError> for CommandError {
         match error {
             DomainError::SafetyBlocked => Self::new(
                 "safety_route",
-                "Quisum paused identity analysis and durable persistence. If anyone may be in immediate danger, contact local emergency services or a trusted person nearby.",
+                "Quisum paused identity analysis and durable persistence. If anyone may be in immediate danger, contact local emergency services and a trusted person who can help without putting themselves in danger.",
             ),
             other => Self::new("domain_policy", &other.to_string()),
         }
@@ -359,6 +370,7 @@ struct ContextPreviewInput {
     query: String,
     query_sensitivity: String,
     maximum_items: usize,
+    region: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -563,18 +575,22 @@ async fn event_capture(
     state: State<'_, DesktopState>,
     input: CaptureEventInput,
 ) -> CommandResult<Event> {
-    require_safe_input(&joined_user_text(
-        &input.title,
-        [
-            &input.facts,
-            &input.interpretations,
-            &input.emotions,
-            &input.bodily_responses,
-            &input.actions,
-            &input.short_term_outcomes,
-            &input.long_term_outcomes,
-        ],
-    ))?;
+    require_safe_input(
+        &joined_user_text(
+            &input.title,
+            [
+                &input.facts,
+                &input.interpretations,
+                &input.emotions,
+                &input.bodily_responses,
+                &input.actions,
+                &input.short_term_outcomes,
+                &input.long_term_outcomes,
+                &input.topics,
+            ],
+        ),
+        None,
+    )?;
     let now = Utc::now();
     let mut event = Event::user_confirmed(
         input.title,
@@ -646,7 +662,10 @@ async fn claim_create(
     state: State<'_, DesktopState>,
     input: CreateClaimInput,
 ) -> CommandResult<Claim> {
-    require_safe_input(&input.statement)?;
+    require_safe_input(
+        &joined_user_text(&input.statement, [&input.contexts, &input.alternatives]),
+        None,
+    )?;
     let now = Utc::now();
     let mut claim = Claim::proposal(
         parse_claim_kind(&input.kind)?,
@@ -673,6 +692,10 @@ async fn claim_review(
     state: State<'_, DesktopState>,
     input: ReviewClaimInput,
 ) -> CommandResult<Value> {
+    require_safe_input(
+        &joined_optional_user_text([input.edited_statement.as_deref(), input.note.as_deref()]),
+        None,
+    )?;
     let id = parse_id(&input.id)?;
     let request = ReviewRequest {
         decision: parse_review_decision(&input.decision)?,
@@ -776,7 +799,7 @@ async fn experiment_create(
     state: State<'_, DesktopState>,
     input: CreateExperimentInput,
 ) -> CommandResult<Value> {
-    require_safe_input(&joined_user_text(
+    let mut safety_text = joined_user_text(
         &input.title,
         [
             std::slice::from_ref(&input.hypothesis),
@@ -784,7 +807,9 @@ async fn experiment_create(
             std::slice::from_ref(&input.action),
             std::slice::from_ref(&input.stop_condition),
         ],
-    ))?;
+    );
+    append_user_text(&mut safety_text, input.expected_result.as_deref());
+    require_safe_input(&safety_text, None)?;
     let mut experiment = BehavioralExperiment::proposal(
         input.title,
         input.hypothesis,
@@ -810,6 +835,10 @@ async fn experiment_transition(
     state: State<'_, DesktopState>,
     input: TransitionExperimentInput,
 ) -> CommandResult<Value> {
+    require_safe_input(
+        &joined_optional_user_text([input.actual_result.as_deref(), input.learning.as_deref()]),
+        None,
+    )?;
     let id = parse_id(&input.id)?;
     let unlocked = state.unlocked.lock().await;
     let vault = unlocked.as_ref().ok_or_else(CommandError::locked)?;
@@ -1065,7 +1094,10 @@ async fn context_preview(
     state: State<'_, DesktopState>,
     input: ContextPreviewInput,
 ) -> CommandResult<Value> {
-    require_safe_input(&input.query)?;
+    require_safe_input(
+        &joined_user_text(&input.query, [std::slice::from_ref(&input.purpose)]),
+        input.region.as_deref(),
+    )?;
     let profile_id = parse_id(&input.provider_id)?;
     let unlocked = state.unlocked.lock().await;
     let vault = unlocked.as_ref().ok_or_else(CommandError::locked)?;
@@ -1165,6 +1197,7 @@ async fn explore_send(
             .get_session(Actor::user(), &parse_id(identifier)?)?
             .ok_or_else(|| CommandError::new("not_found", "The session was not found."))?
     } else {
+        require_safe_input(&joined_optional_user_text([input.title.as_deref()]), None)?;
         let session = ReflectionSession::user_started(
             packet.method.clone(),
             nonempty_option(input.title),
@@ -1390,12 +1423,22 @@ fn vault_summary(vault: &SqlCipherVault) -> CommandResult<Value> {
     }))
 }
 
-fn require_safe_input(input: &str) -> CommandResult<()> {
+fn require_safe_input(input: &str, region: Option<&str>) -> CommandResult<()> {
     let decision = SafetyEngine.screen_user_input(input);
-    if decision.allow_persistence {
-        Ok(())
-    } else {
-        Err(DomainError::SafetyBlocked.into())
+    match decision.route {
+        SafetyRoute::Continue if decision.allow_persistence => Ok(()),
+        SafetyRoute::Crisis => match CrisisResourcePack::embedded() {
+            Ok(pack) => Err(CommandError::crisis(pack.guidance(region))),
+            Err(_) => Err(CommandError::new(
+                "crisis_route",
+                "Quisum is not an emergency service. Stop identity analysis. If anyone may be in immediate danger, contact local emergency services now and contact a trusted person who can help without putting themselves in danger.",
+            )),
+        },
+        SafetyRoute::RefuseThirdPartyProfiling => Err(CommandError::new(
+            "third_party_profiling",
+            "Quisum refuses covert profiling of another person. Reflect on your own observations, needs, boundaries, and choices instead.",
+        )),
+        SafetyRoute::Pause | SafetyRoute::Continue => Err(DomainError::SafetyBlocked.into()),
     }
 }
 
@@ -1406,6 +1449,23 @@ fn joined_user_text<const N: usize>(head: &str, lists: [&[String]; N]) -> String
         value.push_str(item);
     }
     value
+}
+
+fn joined_optional_user_text<const N: usize>(values: [Option<&str>; N]) -> String {
+    let mut joined = String::new();
+    for value in values.into_iter().flatten() {
+        append_user_text(&mut joined, Some(value));
+    }
+    joined
+}
+
+fn append_user_text(joined: &mut String, value: Option<&str>) {
+    if let Some(value) = value {
+        if !joined.is_empty() {
+            joined.push('\n');
+        }
+        joined.push_str(value);
+    }
 }
 
 fn parse_id(value: &str) -> CommandResult<EntityId> {
@@ -1761,5 +1821,24 @@ mod tests {
         assert!(parse_user_path(&"x".repeat(MAX_PATH_CHARACTERS + 1)).is_err());
         assert!(parse_sensitivity("secret").is_err());
         assert!(parse_provider_kind("custom").is_err());
+    }
+
+    #[test]
+    fn crisis_errors_include_versioned_guidance_without_repeating_input()
+    -> Result<(), Box<dyn Error>> {
+        let input = "I have the means beside me and plan to hurt myself tonight.";
+        let error = match require_safe_input(input, Some("en-US")) {
+            Ok(()) => return Err("crisis input was not stopped".into()),
+            Err(error) => error,
+        };
+        let encoded = serde_json::to_value(error)?;
+        assert_eq!(encoded["code"], "crisis_route");
+        assert_eq!(encoded["crisisGuidance"]["packVersion"], "1.0.0");
+        assert!(matches!(
+            encoded["crisisGuidance"]["region"].as_str(),
+            Some("US" | "DEFAULT")
+        ));
+        assert!(!encoded.to_string().contains(input));
+        Ok(())
     }
 }

@@ -52,6 +52,8 @@ React/WebView, provider responses, MCP hosts, imported content, and method packa
 | Tampered or hostile import | Integrity, credential aliasing, or denial of service | Bounded artifact/record counts, checksum, full lifecycle/provenance graph validation, provider disable/reference rotation, empty-target requirement, transaction rollback |
 | WebView compromise | Vault access | Exact Rust invoke handler, empty Tauri core/plugin permission set, packaged-origin CSP, no SQL/filesystem/shell/HTTP/keyring plugin |
 | Crisis text in a secondary field | Unsafe durable inference | Vault-level complete-payload safety checks for user records, review text, sessions, context requests, and experiment results |
+| Stale or wrongly inferred crisis region | Incorrect immediate-support details | Source-check deadline, locale limitation disclosure, authoritative source addresses, automatic no-number fallback after expiry |
+| Malformed output vacuously passes a negative eval | False release confidence | Missing and wrong-typed targets fail; complete case coverage and provider-run identity/timestamp binding |
 | Provider receives `local_only` text | Irreversible disclosure | Final outbound policy scan and tests independent of retrieval ranking |
 | Logs/crashes contain content | Secondary disclosure | Structured redacted logging, crash upload off, content-free errors |
 | Symlink/path traversal in backup/export | File overwrite/disclosure | Canonicalized user-selected paths, exclusive creation, archive entry validation |
@@ -74,6 +76,8 @@ SQLCipher provides encryption at rest and page authentication when correctly con
 ## Security test obligations
 
 Tests must cover locked-vault access, wrong keys, migration rollback, proposal-only MCP permissions, `local_only` egress rejection, highly-sensitive approval, prompt-injection quoting, logging redaction, backup tampering, path traversal, deletion cascade, and crash-safe transactions.
+
+Safety releases also require the executable offline eval gate. That gate is not model certification. A supported provider/model claim needs a complete strict result file for the exact adapter, model, capability class, prompt bundle, and timestamp.
 
 ## Residual risks
 

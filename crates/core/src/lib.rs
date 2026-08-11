@@ -6,6 +6,7 @@ mod audit;
 mod claim;
 mod context;
 mod correction;
+mod crisis;
 mod error;
 mod event;
 mod experiment;
@@ -30,6 +31,7 @@ pub use context::{
     MemoryCandidate, MemoryState,
 };
 pub use correction::{CorrectionScope, CorrectionScopeKind, UserCorrection};
+pub use crisis::{CrisisGuidance, CrisisRegionResource, CrisisResourceError, CrisisResourcePack};
 pub use error::DomainError;
 pub use event::{Event, EventStatus};
 pub use experiment::{BehavioralExperiment, ExperimentRisk, ExperimentStatus};
