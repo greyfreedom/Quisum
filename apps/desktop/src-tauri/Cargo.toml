@@ -1,0 +1,37 @@
+[package]
+name = "quisum-desktop"
+description = "Tauri reference desktop adapter for Quisum."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[lib]
+name = "quisum_desktop"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "quisum-desktop"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[build-dependencies]
+tauri-build.workspace = true
+
+[dependencies]
+chrono.workspace = true
+directories.workspace = true
+quisum-core = { path = "../../../crates/core" }
+quisum-providers = { path = "../../../crates/providers" }
+quisum-vault = { path = "../../../crates/vault" }
+serde.workspace = true
+serde_json.workspace = true
+tauri.workspace = true
+tokio.workspace = true
+zeroize.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

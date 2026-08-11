@@ -35,6 +35,9 @@ impl SqlCipherVault {
         if session.status != SessionStatus::Active || session.source.actor != SourceActor::User {
             return Err(quisum_core::DomainError::InvalidValue("session.initial_state").into());
         }
+        if let Some(title) = session.title.as_deref() {
+            store::require_safe_user_input(title)?;
+        }
         let mut connection = self.connection.lock();
         let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
         transaction

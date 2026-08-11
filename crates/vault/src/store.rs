@@ -61,6 +61,7 @@ impl SqlCipherVault {
         if packet.approved_at.is_some() || packet.dispatched_at.is_some() {
             return Err(quisum_core::DomainError::InvalidValue("context.initial_state").into());
         }
+        require_safe_user_input(&format!("{}\n{}", packet.purpose, packet.query))?;
 
         let mut connection = self.connection.lock();
         let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -185,7 +186,7 @@ impl SqlCipherVault {
         }
 
         let payload = serde_json::to_string(event)?;
-        require_safe_model_output(&event.source, &payload)?;
+        require_safe_source_content(&event.source, &payload)?;
         let mut connection = self.connection.lock();
         let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let _model_context = require_dispatched_model_context(&transaction, &event.source)?;
@@ -324,7 +325,7 @@ impl SqlCipherVault {
         }
 
         let payload = serde_json::to_string(claim)?;
-        require_safe_model_output(&claim.source, &payload)?;
+        require_safe_source_content(&claim.source, &payload)?;
         let mut connection = self.connection.lock();
         let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let model_context = require_dispatched_model_context(&transaction, &claim.source)?;
@@ -469,6 +470,12 @@ impl SqlCipherVault {
             return Err(quisum_core::DomainError::Forbidden(Capability::ReviewClaim).into());
         }
         claim_id.require_kind(EntityKind::Claim)?;
+        if let Some(statement) = request.edited_statement.as_deref() {
+            require_safe_user_input(statement)?;
+        }
+        if let Some(note) = request.note.as_deref() {
+            require_safe_user_input(note)?;
+        }
 
         let mut connection = self.connection.lock();
         let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -766,6 +773,7 @@ impl SqlCipherVault {
         }
         require_source_actor(actor.kind(), correction.source.actor)?;
         let payload = serde_json::to_string(correction)?;
+        require_safe_source_content(&correction.source, &payload)?;
         let mut connection = self.connection.lock();
         let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
         transaction
@@ -853,7 +861,7 @@ impl SqlCipherVault {
             ActorKind::User | ActorKind::System | ActorKind::ModelHost | ActorKind::Import => {}
         }
         let payload = serde_json::to_string(question)?;
-        require_safe_model_output(&question.source, &payload)?;
+        require_safe_source_content(&question.source, &payload)?;
         let mut connection = self.connection.lock();
         let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let model_context = require_dispatched_model_context(&transaction, &question.source)?;
@@ -970,7 +978,7 @@ impl SqlCipherVault {
             return Err(quisum_core::DomainError::InvalidValue("experiment.status").into());
         }
         let payload = serde_json::to_string(experiment)?;
-        require_safe_model_output(&experiment.source, &payload)?;
+        require_safe_source_content(&experiment.source, &payload)?;
         let mut connection = self.connection.lock();
         let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let model_context = require_dispatched_model_context(&transaction, &experiment.source)?;
@@ -1082,6 +1090,10 @@ impl SqlCipherVault {
         }
         experiment_id.require_kind(EntityKind::Experiment)?;
 
+        let actual_result = actual_result.into();
+        let learning = learning.into();
+        require_safe_user_input(&format!("{actual_result}\n{learning}"))?;
+
         let mut connection = self.connection.lock();
         let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let mut experiment = load_experiment(&transaction, experiment_id)?;
@@ -1192,11 +1204,21 @@ fn require_source_actor(actor: ActorKind, source: SourceActor) -> Result<(), Vau
     }
 }
 
-fn require_safe_model_output(source: &Source, serialized: &str) -> Result<(), VaultError> {
-    if source.actor == SourceActor::Model {
-        let decision = SafetyEngine.review_generated_text(serialized);
-        SafetyEngine.require_persistence_allowed(&decision)?;
+fn require_safe_source_content(source: &Source, serialized: &str) -> Result<(), VaultError> {
+    match source.actor {
+        SourceActor::User => require_safe_user_input(serialized)?,
+        SourceActor::Model => {
+            let decision = SafetyEngine.review_generated_text(serialized);
+            SafetyEngine.require_persistence_allowed(&decision)?;
+        }
+        SourceActor::Import | SourceActor::System => {}
     }
+    Ok(())
+}
+
+pub(crate) fn require_safe_user_input(input: &str) -> Result<(), VaultError> {
+    let decision = SafetyEngine.screen_user_input(input);
+    SafetyEngine.require_persistence_allowed(&decision)?;
     Ok(())
 }
 
@@ -1894,8 +1916,8 @@ mod tests {
     use chrono::Utc;
     use quisum_core::{
         ClaimKind, ContextBuilder, ContextItemType, EvidenceGrade, ExperimentRisk, MemoryCandidate,
-        MemoryState, OpenQuestion, PrivacyKind, ProviderCapabilities, ProviderKind, ReviewDecision,
-        Sensitivity, Source, UserEndorsement,
+        MemoryState, OpenQuestion, PrivacyKind, ProviderCapabilities, ProviderKind,
+        ReflectionSession, ReviewDecision, Sensitivity, Source, UserEndorsement,
     };
     use tempfile::TempDir;
 
@@ -2120,6 +2142,105 @@ mod tests {
                     Utc::now(),
                 )
                 .is_err()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn user_secondary_text_cannot_bypass_safety_persistence() -> Result<(), Box<dyn Error>> {
+        const BLOCKED: &str = "I have the means beside me and plan to hurt myself tonight.";
+        let (_directory, _key, vault) = test_vault()?;
+
+        let mut event = Event::user_confirmed(
+            "Synthetic safe title",
+            vec!["A synthetic observable fact.".to_owned()],
+            None,
+            Utc::now(),
+            Sensitivity::Private,
+        );
+        event.topics.insert(BLOCKED.to_owned());
+        assert!(matches!(
+            vault.insert_event(Actor::user(), &event),
+            Err(VaultError::Domain(quisum_core::DomainError::SafetyBlocked))
+        ));
+
+        let session = ReflectionSession::user_started(
+            "free-reflection@1.0.0",
+            Some(BLOCKED.to_owned()),
+            Sensitivity::Private,
+            Utc::now(),
+        );
+        assert!(matches!(
+            vault.create_session(Actor::user(), &session),
+            Err(VaultError::Domain(quisum_core::DomainError::SafetyBlocked))
+        ));
+
+        let profile = test_provider(&vault, BTreeSet::from([Sensitivity::Private]))?;
+        let packet = ContextBuilder::new(1)?.build(
+            Actor::user(),
+            BLOCKED,
+            "free-reflection@1.0.0",
+            profile.id,
+            profile.model,
+            "A safe synthetic request",
+            Sensitivity::Private,
+            Vec::new(),
+            Utc::now(),
+        )?;
+        assert!(matches!(
+            vault.insert_context_packet(Actor::system(), &packet),
+            Err(VaultError::Domain(quisum_core::DomainError::SafetyBlocked))
+        ));
+
+        let evidence = insert_confirmed_event(&vault, "Synthetic review evidence")?;
+        let claim = pending_pattern(&vault, evidence.id)?;
+        let claim_id = claim.id.clone();
+        vault.insert_claim(Actor::model_host(), &claim)?;
+        assert!(matches!(
+            vault.review_claim(
+                Actor::user(),
+                &claim_id,
+                ReviewRequest {
+                    decision: ReviewDecision::Confirm,
+                    edited_statement: None,
+                    note: Some(BLOCKED.to_owned()),
+                },
+                Utc::now(),
+            ),
+            Err(VaultError::Domain(quisum_core::DomainError::SafetyBlocked))
+        ));
+
+        let planned_at = Utc::now();
+        let experiment = BehavioralExperiment::proposal(
+            "Synthetic bounded experiment",
+            "A contextual hypothesis.",
+            "One observable prediction.",
+            "Try one reversible action once.",
+            "Stop if consequences become unclear.",
+            ExperimentRisk::Low,
+            planned_at,
+            Sensitivity::Private,
+            Source::user(),
+        );
+        let experiment_id = experiment.id.clone();
+        vault.insert_experiment(Actor::user(), &experiment)?;
+        vault.activate_experiment(Actor::user(), &experiment_id, Utc::now())?;
+        assert!(matches!(
+            vault.complete_experiment(
+                Actor::user(),
+                &experiment_id,
+                BLOCKED,
+                "A safe learning note.",
+                Utc::now(),
+            ),
+            Err(VaultError::Domain(quisum_core::DomainError::SafetyBlocked))
+        ));
+        assert_eq!(
+            vault
+                .get_experiment(Actor::user(), &experiment_id)?
+                .ok_or("experiment not found")?
+                .status,
+            ExperimentStatus::Active
         );
         Ok(())
     }

@@ -1,0 +1,42 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Quisum",
+  "version": "0.1.0",
+  "identifier": "org.quisum.desktop",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://127.0.0.1:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Quisum",
+        "width": 1260,
+        "height": 820,
+        "minWidth": 920,
+        "minHeight": 640,
+        "resizable": true,
+        "fullscreen": false,
+        "center": true
+      }
+    ],
+    "security": {
+      "capabilities": ["main"],
+      "csp": "default-src 'self' customprotocol: asset:; connect-src ipc: http://ipc.localhost; font-src 'self'; img-src 'self' asset: http://asset.localhost data:; object-src 'none'; script-src 'self'; style-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'",
+      "devCsp": "default-src 'self' http://127.0.0.1:1420; connect-src ipc: http://ipc.localhost http://127.0.0.1:1420 ws://127.0.0.1:1420; font-src 'self' http://127.0.0.1:1420; img-src 'self' data: asset: http://asset.localhost http://127.0.0.1:1420; object-src 'none'; script-src 'self' http://127.0.0.1:1420; style-src 'self' 'unsafe-inline' http://127.0.0.1:1420; base-uri 'none'; frame-ancestors 'none'; form-action 'none'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "Productivity",
+    "shortDescription": "Local-first, evidence-governed self-inquiry",
+    "longDescription": "Explore observations and revisable hypotheses while keeping encrypted local custody and human review authority.",
+    "resources": {
+      "../../../methods": "methods"
+    }
+  }
+}

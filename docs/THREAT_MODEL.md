@@ -50,7 +50,8 @@ React/WebView, provider responses, MCP hosts, imported content, and method packa
 | Model confirms/deletes a claim | Integrity loss | Actor capabilities enforced in Core; MCP exposes proposal-only mutations |
 | Removed evidence still supports a claim | False durable identity | Dependency graph, transactional cascade, re-review/regrade |
 | Tampered or hostile import | Integrity, credential aliasing, or denial of service | Bounded artifact/record counts, checksum, full lifecycle/provenance graph validation, provider disable/reference rotation, empty-target requirement, transaction rollback |
-| WebView compromise | Vault access | Domain-only Tauri commands, narrow capability allowlist, CSP, no SQL plugin/shell access |
+| WebView compromise | Vault access | Exact Rust invoke handler, empty Tauri core/plugin permission set, packaged-origin CSP, no SQL/filesystem/shell/HTTP/keyring plugin |
+| Crisis text in a secondary field | Unsafe durable inference | Vault-level complete-payload safety checks for user records, review text, sessions, context requests, and experiment results |
 | Provider receives `local_only` text | Irreversible disclosure | Final outbound policy scan and tests independent of retrieval ranking |
 | Logs/crashes contain content | Secondary disclosure | Structured redacted logging, crash upload off, content-free errors |
 | Symlink/path traversal in backup/export | File overwrite/disclosure | Canonicalized user-selected paths, exclusive creation, archive entry validation |

@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+  "apps/desktop/src-tauri",
   "crates/core",
   "crates/vault",
   "crates/providers",
@@ -53,6 +54,8 @@ sha2 = "0.11.0"
 tempfile = "3.23.0"
 thiserror = "2.0.19"
 tokio = { version = "1.53.0", features = ["io-std", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
+tauri = { version = "2.11.5", default-features = false, features = ["wry"] }
+tauri-build = { version = "2.6.3", default-features = false }
 ulid = { version = "3.0.0", features = ["serde"] }
 url = { version = "2.5.8", features = ["serde"] }
 zeroize = { version = "1.9.0", features = ["derive"] }

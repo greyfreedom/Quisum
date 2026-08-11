@@ -15,6 +15,7 @@ const EMBEDDING_MODEL: &str = "quisum-local-feature-v1";
 const EMBEDDING_DIMENSIONS: usize = 384;
 const MAXIMUM_SCAN_RECORDS: usize = 5_000;
 const MAX_CONTEXT_EXCERPT_CHARS: usize = 8_000;
+const MAX_SEARCH_QUERY_CHARS: usize = 4_000;
 
 #[derive(Debug)]
 struct SearchableMemory {
@@ -37,7 +38,11 @@ impl SqlCipherVault {
     ) -> Result<Vec<MemoryCandidate>, VaultError> {
         actor.require(Capability::SearchMemory)?;
         let query = query.trim();
-        if query.is_empty() || query.chars().count() > 500 || limit == 0 || limit > 100 {
+        if query.is_empty()
+            || query.chars().count() > MAX_SEARCH_QUERY_CHARS
+            || limit == 0
+            || limit > 100
+        {
             return Err(quisum_core::DomainError::InvalidValue("search.request").into());
         }
         let connection = self.connection.lock();
@@ -639,6 +644,24 @@ mod tests {
             vault
                 .search_memory(Actor::user(), "\" OR * : -", 10)?
                 .is_empty()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn search_query_bound_matches_the_context_request_bound() -> Result<(), Box<dyn Error>> {
+        let directory = tempdir()?;
+        let vault =
+            SqlCipherVault::create(directory.path().join("vault.db"), &VaultKey::generate()?)?;
+        assert!(
+            vault
+                .search_memory(Actor::user(), &"x".repeat(MAX_SEARCH_QUERY_CHARS), 10)
+                .is_ok()
+        );
+        assert!(
+            vault
+                .search_memory(Actor::user(), &"x".repeat(MAX_SEARCH_QUERY_CHARS + 1), 10,)
+                .is_err()
         );
         Ok(())
     }
