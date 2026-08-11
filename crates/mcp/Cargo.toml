@@ -1,0 +1,15 @@
+[package]
+name = "quisum-mcp"
+description = "Least-privilege MCP adapter for Quisum."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+quisum-core = { path = "../core" }
+quisum-vault = { path = "../vault" }

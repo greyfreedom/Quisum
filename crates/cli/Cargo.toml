@@ -1,0 +1,17 @@
+[package]
+name = "quisum-cli"
+description = "Command-line adapter for Quisum."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+quisum-core = { path = "../core" }
+quisum-mcp = { path = "../mcp" }
+quisum-providers = { path = "../providers" }
+quisum-vault = { path = "../vault" }

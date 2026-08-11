@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quisum.org/methods/event-debrief/output.schema.json",
+  "title": "Event Debrief output",
+  "allOf": [
+    {
+      "$ref": "../../schemas/method-output.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "event-debrief@1.0.0"
+        }
+      }
+    }
+  ]
+}

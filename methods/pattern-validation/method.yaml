@@ -1,0 +1,23 @@
+schema_version: 1.0.0
+id: pattern-validation
+version: 1.0.0
+title: "Pattern Validation"
+description: "Tests a possible recurring pattern against supporting events, exceptions, contexts, time span, state effects, and alternative explanations."
+purposes:
+  - pattern-validation
+requires:
+  streaming: false
+  structured_output: false
+  tool_use: false
+files:
+  facilitator: facilitator.md
+  output_schema: output.schema.json
+  memory_policy: memory-policy.yaml
+  safety: safety.md
+  examples: examples.jsonl
+  evals: evals/cases.jsonl
+review:
+  status: unreviewed
+  reviewed_at: null
+  reviewer: null
+license: Apache-2.0

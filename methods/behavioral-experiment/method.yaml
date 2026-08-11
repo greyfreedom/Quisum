@@ -1,0 +1,23 @@
+schema_version: 1.0.0
+id: behavioral-experiment
+version: 1.0.0
+title: "Behavioral Experiment"
+description: "Turns a self-hypothesis into a bounded, observable, reversible action with a prediction, stop condition, and later learning review."
+purposes:
+  - behavioral-experiment
+requires:
+  streaming: false
+  structured_output: false
+  tool_use: false
+files:
+  facilitator: facilitator.md
+  output_schema: output.schema.json
+  memory_policy: memory-policy.yaml
+  safety: safety.md
+  examples: examples.jsonl
+  evals: evals/cases.jsonl
+review:
+  status: unreviewed
+  reviewed_at: null
+  reviewer: null
+license: Apache-2.0

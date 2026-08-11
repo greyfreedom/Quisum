@@ -1,0 +1,23 @@
+schema_version: 1.0.0
+id: event-debrief
+version: 1.0.0
+title: "Event Debrief"
+description: "A concrete event review that separates facts, thoughts, feelings, bodily responses, actions, outcomes, protected needs, and alternatives."
+purposes:
+  - event-debrief
+requires:
+  streaming: false
+  structured_output: false
+  tool_use: false
+files:
+  facilitator: facilitator.md
+  output_schema: output.schema.json
+  memory_policy: memory-policy.yaml
+  safety: safety.md
+  examples: examples.jsonl
+  evals: evals/cases.jsonl
+review:
+  status: unreviewed
+  reviewed_at: null
+  reviewer: null
+license: Apache-2.0

@@ -1,0 +1,20 @@
+schema_version: 1.0.0
+method: behavioral-experiment@1.0.0
+default_sensitivity: private
+candidate_status: pending_review
+allowed_candidates:
+  - session_summary
+  - experiment_candidate
+  - open_question_candidate
+never_persist:
+  - hidden_chain_of_thought
+  - raw_working_notes
+  - rejected_candidate
+  - acute_crisis_identity_inference
+  - third_party_profile
+ordinary_retrieval:
+  include_pending_candidates: false
+  include_rejected: false
+  include_crisis_related: false
+  include_local_only: false
+human_review_required: true
