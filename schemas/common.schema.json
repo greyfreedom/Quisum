@@ -63,7 +63,8 @@
             "required": ["actor"]
           },
           "then": {
-            "required": ["method", "provider", "model", "context_packet_id"]
+            "required": ["method", "provider", "model", "context_packet_id"],
+            "not": {"required": ["import_id"]}
           }
         },
         {
@@ -72,7 +73,34 @@
             "required": ["actor"]
           },
           "then": {
-            "required": ["import_id"]
+            "required": ["import_id"],
+            "not": {
+              "anyOf": [
+                {"required": ["method"]},
+                {"required": ["provider"]},
+                {"required": ["model"]},
+                {"required": ["context_packet_id"]}
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "actor": {"enum": ["user", "system"]}
+            },
+            "required": ["actor"]
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                {"required": ["method"]},
+                {"required": ["provider"]},
+                {"required": ["model"]},
+                {"required": ["context_packet_id"]},
+                {"required": ["import_id"]}
+              ]
+            }
           }
         }
       ]

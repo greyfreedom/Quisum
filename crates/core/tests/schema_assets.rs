@@ -7,6 +7,12 @@ use std::{
 };
 
 use jsonschema::Registry;
+use quisum_core::{
+    Actor, AuditAction, AuditDetails, AuditEvent, BehavioralExperiment, Claim, ClaimKind,
+    ContextBuilder, ContextItemType, CorrectionScope, EntityId, EntityKind, EvidenceGrade,
+    ExperimentRisk, MemoryCandidate, MemoryState, OpenQuestion, ReviewDecision, ReviewRequest,
+    Sensitivity, Source, UserCorrection, Validate,
+};
 use serde_json::Value;
 
 fn workspace_root() -> PathBuf {
@@ -126,6 +132,130 @@ fn synthetic_vault_records_match_public_schemas() -> Result<(), Box<dyn Error>> 
 }
 
 #[test]
+fn runtime_domain_objects_match_public_schemas() -> Result<(), Box<dyn Error>> {
+    let schemas = load_schemas()?;
+    let registry = registry(&schemas)?;
+    let root = workspace_root();
+    let now = chrono::Utc::now();
+
+    let event = quisum_core::Event::user_confirmed(
+        "Synthetic event",
+        vec!["A bounded observable fact.".to_owned()],
+        None,
+        now,
+        Sensitivity::Private,
+    );
+    event.validate()?;
+
+    let mut claim = Claim::proposal(
+        ClaimKind::PatternHypothesis,
+        "A bounded contextual pattern may apply.",
+        EvidenceGrade::Limited,
+        Sensitivity::Private,
+        Source::model(
+            "pattern-validation@1.0.0",
+            "synthetic-provider",
+            "synthetic-model",
+            EntityId::new(EntityKind::Context),
+        ),
+        now,
+    );
+    claim.supporting_evidence.insert(event.id.clone());
+    claim
+        .alternative_explanations
+        .push("A temporary constraint may explain the event.".to_owned());
+    let review = claim
+        .apply_review(
+            Actor::user(),
+            ReviewRequest {
+                decision: ReviewDecision::ReviseAndConfirm,
+                edited_statement: Some("A narrower contextual pattern may apply.".to_owned()),
+                note: None,
+            },
+            now,
+        )?
+        .review;
+
+    let question = OpenQuestion::from_reviewed_claim(
+        "In which contexts does the pattern not appear?",
+        claim.id.clone(),
+        Sensitivity::Private,
+        now,
+    );
+    question.validate()?;
+
+    let correction = UserCorrection::new(
+        "Do not describe this as a stable trait.",
+        CorrectionScope::claim(&claim.id),
+        Sensitivity::Private,
+        now,
+    );
+    correction.validate()?;
+
+    let experiment = BehavioralExperiment::proposal(
+        "One reversible test",
+        "The pattern may be context-specific.",
+        "A small change may produce an observable difference.",
+        "Try one low-consequence change once.",
+        "Stop if discomfort rises or consequences become unclear.",
+        ExperimentRisk::Low,
+        now,
+        Sensitivity::Private,
+        Source::user(),
+    );
+    experiment.validate()?;
+
+    let packet = ContextBuilder::new(4)?.build(
+        Actor::model_host(),
+        "Synthetic contract test",
+        "free-reflection@1.0.0",
+        EntityId::new(EntityKind::Provider),
+        "synthetic-model",
+        "A bounded query",
+        vec![MemoryCandidate {
+            item_type: ContextItemType::Claim,
+            item_id: claim.id.clone(),
+            excerpt: claim.statement.clone(),
+            sensitivity: Sensitivity::Private,
+            state: MemoryState::Confirmed,
+            crisis_related: false,
+            relevant: true,
+            selection_reason: "Directly relevant reviewed claim.".to_owned(),
+            relevance_score: 100,
+            recorded_at: now,
+        }],
+        now,
+    )?;
+
+    let audit = AuditEvent::new(
+        quisum_core::ActorKind::User,
+        AuditAction::ClaimReviewed,
+        Some(claim.id.clone()),
+        AuditDetails::None,
+        now,
+    );
+    audit.validate()?;
+
+    let instances = [
+        ("event.schema.json", serde_json::to_value(event)?),
+        ("claim.schema.json", serde_json::to_value(claim)?),
+        ("review.schema.json", serde_json::to_value(review)?),
+        ("open-question.schema.json", serde_json::to_value(question)?),
+        ("correction.schema.json", serde_json::to_value(correction)?),
+        ("experiment.schema.json", serde_json::to_value(experiment)?),
+        ("context-packet.schema.json", serde_json::to_value(packet)?),
+        ("audit-event.schema.json", serde_json::to_value(audit)?),
+    ];
+
+    for (schema_file, instance) in instances {
+        let schema = read_json(&root.join("schemas").join(schema_file))?;
+        assert_valid(&schema, &instance, &registry)
+            .map_err(|error| format!("runtime {schema_file}: {error}"))?;
+    }
+    Ok(())
+}
+
+#[test]
 fn method_examples_match_their_output_schemas() -> Result<(), Box<dyn Error>> {
     let schemas = load_schemas()?;
     let registry = registry(&schemas)?;
@@ -190,6 +320,12 @@ fn schemas_enforce_epistemic_and_privacy_boundaries() -> Result<(), Box<dyn Erro
     claim["alternative_explanations"] = serde_json::json!(["A contextual alternative."]);
     claim["status"] = serde_json::json!("confirmed");
     assert_invalid(&claim_schema, &claim, &registry)?;
+    claim["status"] = serde_json::json!("pending_review");
+    claim["evidence_grade"] = serde_json::json!("limited");
+    assert_invalid(&claim_schema, &claim, &registry)?;
+    claim["counterevidence"] = serde_json::json!([]);
+    claim["evidence_grade"] = serde_json::json!("repeated");
+    assert_invalid(&claim_schema, &claim, &registry)?;
 
     let context_schema = read_json(&root.join("schemas/context-packet.schema.json"))?;
     let mut context = read_jsonl(&root.join("fixtures/synthetic-vaults/context-packets.jsonl"))?
@@ -206,6 +342,18 @@ fn schemas_enforce_epistemic_and_privacy_boundaries() -> Result<(), Box<dyn Erro
     assert_invalid(&context_schema, &context, &registry)?;
     context["dispatched_at"] = Value::Null;
     assert_valid(&context_schema, &context, &registry)?;
+    context["items"][0]["sensitivity"] = serde_json::json!("private");
+    context["requires_approval"] = serde_json::json!(true);
+    context["approved_at"] = serde_json::json!("2026-08-01T10:00:01Z");
+    assert_invalid(&context_schema, &context, &registry)?;
+
+    let event_schema = read_json(&root.join("schemas/event.schema.json"))?;
+    let mut event = read_jsonl(&root.join("fixtures/synthetic-vaults/events.jsonl"))?
+        .into_iter()
+        .next()
+        .ok_or("missing synthetic event")?;
+    event["source"]["method"] = serde_json::json!("event-debrief@1.0.0");
+    assert_invalid(&event_schema, &event, &registry)?;
 
     Ok(())
 }

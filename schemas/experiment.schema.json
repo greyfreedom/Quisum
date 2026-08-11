@@ -11,6 +11,7 @@
     "hypothesis",
     "prediction",
     "action",
+    "stop_condition",
     "risk_level",
     "status",
     "related_claims",
@@ -30,6 +31,11 @@
     "hypothesis": {"$ref": "common.schema.json#/$defs/boundedText"},
     "prediction": {"$ref": "common.schema.json#/$defs/boundedText"},
     "action": {"$ref": "common.schema.json#/$defs/boundedText"},
+    "stop_condition": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1000
+    },
     "risk_level": {"type": "string", "enum": ["low", "moderate"]},
     "status": {
       "type": "string",

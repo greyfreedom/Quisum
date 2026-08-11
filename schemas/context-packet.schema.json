@@ -73,7 +73,8 @@
               "expired",
               "topic_policy",
               "requires_explicit_approval",
-              "result_limit"
+              "result_limit",
+              "deprecated"
             ]
           }
         }
@@ -122,6 +123,29 @@
       "then": {
         "properties": {
           "approved_at": {"$ref": "common.schema.json#/$defs/timestamp"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "requires_approval": {"const": true}
+        },
+        "required": ["requires_approval"]
+      },
+      "then": {
+        "properties": {
+          "items": {
+            "contains": {
+              "properties": {"sensitivity": {"const": "highly_sensitive"}},
+              "required": ["sensitivity"]
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "approved_at": {"type": "null"}
         }
       }
     }
