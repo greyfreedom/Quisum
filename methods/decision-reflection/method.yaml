@@ -1,0 +1,23 @@
+schema_version: 1.0.0
+id: decision-reflection
+version: 1.0.0
+title: "Decision Reflection"
+description: "Clarifies needs, sacrifices, constraints, fears, expectations, reversibility, and low-cost tests while leaving the decision with the user."
+purposes:
+  - decision-reflection
+requires:
+  streaming: false
+  structured_output: false
+  tool_use: false
+files:
+  facilitator: facilitator.md
+  output_schema: output.schema.json
+  memory_policy: memory-policy.yaml
+  safety: safety.md
+  examples: examples.jsonl
+  evals: evals/cases.jsonl
+review:
+  status: unreviewed
+  reviewed_at: null
+  reviewer: null
+license: Apache-2.0

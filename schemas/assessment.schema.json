@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quisum.org/schemas/assessment.schema.json",
+  "title": "Quisum formal assessment result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "id",
+    "instrument",
+    "status",
+    "dimensions",
+    "administered_at",
+    "sensitivity",
+    "source"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "id": {
+      "$ref": "common.schema.json#/$defs/entityId"
+    },
+    "instrument": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version",
+        "source",
+        "license",
+        "language"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "source": {
+          "type": "string",
+          "format": "uri",
+          "maxLength": 1000
+        },
+        "license": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "language": {
+          "type": "string",
+          "pattern": "^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$"
+        }
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "completed",
+        "superseded",
+        "deleted"
+      ]
+    },
+    "dimensions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "score",
+          "scale_min",
+          "scale_max"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "score": {
+            "type": "number"
+          },
+          "scale_min": {
+            "type": "number"
+          },
+          "scale_max": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "administered_at": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    },
+    "sensitivity": {
+      "$ref": "common.schema.json#/$defs/sensitivity"
+    },
+    "source": {
+      "allOf": [
+        {"$ref": "common.schema.json#/$defs/source"},
+        {
+          "properties": {
+            "actor": {"enum": ["user", "import", "system"]}
+          }
+        }
+      ]
+    }
+  }
+}

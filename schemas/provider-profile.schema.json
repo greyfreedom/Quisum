@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quisum.org/schemas/provider-profile.schema.json",
+  "title": "Quisum model provider profile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "id",
+    "name",
+    "kind",
+    "base_url",
+    "model",
+    "privacy_kind",
+    "capabilities",
+    "trusted_sensitivities",
+    "credential_ref",
+    "retention_note",
+    "enabled",
+    "created_at",
+    "updated_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "id": {
+      "$ref": "common.schema.json#/$defs/entityId"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "openai",
+        "anthropic",
+        "openai_compatible",
+        "local_http"
+      ]
+    },
+    "base_url": {
+      "type": "string",
+      "format": "uri",
+      "maxLength": 1000
+    },
+    "model": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "privacy_kind": {
+      "type": "string",
+      "enum": [
+        "cloud",
+        "local"
+      ]
+    },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "streaming",
+        "tool_use",
+        "json_schema",
+        "vision",
+        "context_limit"
+      ],
+      "properties": {
+        "streaming": {
+          "type": "boolean"
+        },
+        "tool_use": {
+          "type": "boolean"
+        },
+        "json_schema": {
+          "type": "boolean"
+        },
+        "vision": {
+          "type": "boolean"
+        },
+        "context_limit": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        }
+      }
+    },
+    "trusted_sensitivities": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "normal",
+          "private",
+          "highly_sensitive"
+        ]
+      }
+    },
+    "credential_ref": {
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_.-]{0,159}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "retention_note": {
+      "oneOf": [
+        {
+          "type": "string",
+          "maxLength": 2000
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "created_at": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    },
+    "updated_at": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "privacy_kind": {
+            "const": "cloud"
+          }
+        },
+        "required": [
+          "privacy_kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "credential_ref": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_.-]{0,159}$"
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quisum.org/schemas/method-output.schema.json",
+  "title": "Quisum method model output",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "method", "assistant_response", "session_summary", "event_candidates", "claim_candidates", "open_question_candidates", "experiment_candidates", "safety"],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "method": {"type": "string", "pattern": "^[a-z0-9-]+@[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "assistant_response": {"type": "string", "minLength": 1, "maxLength": 12000},
+    "session_summary": {
+      "oneOf": [
+        {"type": "string", "minLength": 1, "maxLength": 4000},
+        {"type": "null"}
+      ]
+    },
+    "event_candidates": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["title", "facts", "interpretations", "emotions", "topics", "sensitivity"],
+        "properties": {
+          "title": {"type": "string", "minLength": 1, "maxLength": 240},
+          "facts": {"type": "array", "minItems": 1, "maxItems": 32, "items": {"type": "string", "minLength": 1, "maxLength": 4000}},
+          "interpretations": {"type": "array", "maxItems": 16, "items": {"type": "string", "minLength": 1, "maxLength": 4000}},
+          "emotions": {"type": "array", "maxItems": 16, "items": {"type": "string", "minLength": 1, "maxLength": 80}},
+          "topics": {"type": "array", "maxItems": 16, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 80}},
+          "sensitivity": {"$ref": "common.schema.json#/$defs/sensitivity"}
+        }
+      }
+    },
+    "claim_candidates": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "statement", "contexts", "supporting_evidence", "counterevidence", "alternative_explanations", "evidence_grade", "sensitivity"],
+        "properties": {
+          "kind": {"type": "string", "enum": ["explicit_fact", "user_self_assessment", "current_state", "value", "strength", "need_or_boundary", "pattern_hypothesis"]},
+          "statement": {"type": "string", "minLength": 1, "maxLength": 4000},
+          "contexts": {"type": "array", "maxItems": 32, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 80}},
+          "supporting_evidence": {"type": "array", "maxItems": 64, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 80}},
+          "counterevidence": {"type": "array", "maxItems": 64, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 80}},
+          "alternative_explanations": {"type": "array", "maxItems": 12, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 1000}},
+          "evidence_grade": {"type": "string", "enum": ["limited", "moderate", "repeated", "contested"]},
+          "sensitivity": {"$ref": "common.schema.json#/$defs/sensitivity"}
+        }
+      }
+    },
+    "open_question_candidates": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["question", "contexts", "sensitivity"],
+        "properties": {
+          "question": {"type": "string", "minLength": 1, "maxLength": 4000},
+          "contexts": {"type": "array", "maxItems": 32, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 80}},
+          "sensitivity": {"$ref": "common.schema.json#/$defs/sensitivity"}
+        }
+      }
+    },
+    "experiment_candidates": {
+      "type": "array",
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["title", "hypothesis", "prediction", "action", "risk_level", "stop_condition", "sensitivity"],
+        "properties": {
+          "title": {"type": "string", "minLength": 1, "maxLength": 240},
+          "hypothesis": {"type": "string", "minLength": 1, "maxLength": 4000},
+          "prediction": {"type": "string", "minLength": 1, "maxLength": 4000},
+          "action": {"type": "string", "minLength": 1, "maxLength": 4000},
+          "risk_level": {"type": "string", "enum": ["low", "moderate"]},
+          "stop_condition": {"type": "string", "minLength": 1, "maxLength": 1000},
+          "sensitivity": {"$ref": "common.schema.json#/$defs/sensitivity"}
+        }
+      }
+    },
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["route", "reasons", "allow_persistence"],
+      "properties": {
+        "route": {"type": "string", "enum": ["continue", "pause", "crisis", "refuse_third_party_profiling"]},
+        "reasons": {"type": "array", "maxItems": 16, "items": {"type": "string", "minLength": 1, "maxLength": 500}},
+        "allow_persistence": {"type": "boolean"}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "safety": {
+            "properties": {"route": {"const": "crisis"}},
+            "required": ["route"]
+          }
+        },
+        "required": ["safety"]
+      },
+      "then": {
+        "properties": {
+          "session_summary": {"type": "null"},
+          "event_candidates": {"maxItems": 0},
+          "claim_candidates": {"maxItems": 0},
+          "open_question_candidates": {"maxItems": 0},
+          "experiment_candidates": {"maxItems": 0},
+          "safety": {
+            "properties": {"allow_persistence": {"const": false}}
+          }
+        }
+      }
+    }
+  ]
+}

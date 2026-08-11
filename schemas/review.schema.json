@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quisum.org/schemas/review.schema.json",
+  "title": "Quisum human review",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "id", "claim_id", "decision", "edited_statement", "note", "reviewed_at"],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "id": {"$ref": "common.schema.json#/$defs/entityId"},
+    "claim_id": {"$ref": "common.schema.json#/$defs/entityId"},
+    "decision": {
+      "type": "string",
+      "enum": ["confirm", "revise_and_confirm", "uncertain", "reject", "convert_to_open_question"]
+    },
+    "edited_statement": {
+      "oneOf": [{"$ref": "common.schema.json#/$defs/boundedText"}, {"type": "null"}]
+    },
+    "note": {
+      "oneOf": [{"type": "string", "maxLength": 4000}, {"type": "null"}]
+    },
+    "reviewed_at": {"$ref": "common.schema.json#/$defs/timestamp"}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"decision": {"const": "revise_and_confirm"}},
+        "required": ["decision"]
+      },
+      "then": {
+        "properties": {"edited_statement": {"$ref": "common.schema.json#/$defs/boundedText"}}
+      }
+    }
+  ]
+}

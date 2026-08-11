@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quisum.org/schemas/correction.schema.json",
+  "title": "Quisum user correction",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "id",
+    "statement",
+    "scope",
+    "related_claims",
+    "topics",
+    "active",
+    "sensitivity",
+    "created_at",
+    "updated_at",
+    "source"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "id": {
+      "$ref": "common.schema.json#/$defs/entityId"
+    },
+    "statement": {
+      "$ref": "common.schema.json#/$defs/boundedText"
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "value"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "interpretation",
+            "phrase",
+            "topic",
+            "claim",
+            "global"
+          ]
+        },
+        "value": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "related_claims": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "common.schema.json#/$defs/entityId"
+      }
+    },
+    "topics": {
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "common.schema.json#/$defs/topic"
+      }
+    },
+    "active": {
+      "type": "boolean"
+    },
+    "sensitivity": {
+      "$ref": "common.schema.json#/$defs/sensitivity"
+    },
+    "created_at": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    },
+    "updated_at": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    },
+    "source": {
+      "allOf": [
+        {
+          "$ref": "common.schema.json#/$defs/source"
+        },
+        {
+          "properties": {
+            "actor": {
+              "const": "user"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "scope": {
+            "properties": {"kind": {"const": "global"}},
+            "required": ["kind"]
+          }
+        },
+        "required": ["scope"]
+      },
+      "else": {
+        "properties": {
+          "scope": {
+            "properties": {
+              "value": {"type": "string", "minLength": 1, "maxLength": 1000}
+            }
+          }
+        }
+      }
+    }
+  ]
+}

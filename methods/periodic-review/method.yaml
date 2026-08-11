@@ -1,0 +1,25 @@
+schema_version: 1.0.0
+id: periodic-review
+version: 1.0.0
+title: "Periodic Review"
+description: "Reviews recent themes, confirmed changes, contradictions, open questions, and experiments without generating a definitive personality report."
+purposes:
+  - weekly-review
+  - monthly-review
+  - periodic-review
+requires:
+  streaming: false
+  structured_output: false
+  tool_use: false
+files:
+  facilitator: facilitator.md
+  output_schema: output.schema.json
+  memory_policy: memory-policy.yaml
+  safety: safety.md
+  examples: examples.jsonl
+  evals: evals/cases.jsonl
+review:
+  status: unreviewed
+  reviewed_at: null
+  reviewer: null
+license: Apache-2.0

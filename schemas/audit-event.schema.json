@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quisum.org/schemas/audit-event.schema.json",
+  "title": "Quisum content-free audit event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "id",
+    "actor",
+    "action",
+    "entity_type",
+    "entity_id",
+    "details",
+    "created_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "id": {
+      "$ref": "common.schema.json#/$defs/entityId"
+    },
+    "actor": {
+      "type": "string",
+      "enum": [
+        "user",
+        "model_host",
+        "system",
+        "import"
+      ]
+    },
+    "action": {
+      "type": "string",
+      "enum": [
+        "vault_created",
+        "vault_unlocked",
+        "vault_locked",
+        "migration_applied",
+        "session_created",
+        "candidate_proposed",
+        "claim_reviewed",
+        "claim_revised",
+        "evidence_added",
+        "entity_deleted",
+        "context_built",
+        "context_approved",
+        "context_dispatched",
+        "export_created",
+        "backup_created",
+        "restore_completed",
+        "policy_changed",
+        "provider_tested"
+      ]
+    },
+    "entity_type": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "vault",
+            "session",
+            "event",
+            "claim",
+            "correction",
+            "open_question",
+            "experiment",
+            "assessment",
+            "context_packet",
+            "provider",
+            "consent",
+            "export",
+            "backup"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "entity_id": {
+      "oneOf": [
+        {
+          "$ref": "common.schema.json#/$defs/entityId"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "details": {
+      "type": "object",
+      "maxProperties": 16,
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]{0,63}$"
+      },
+      "additionalProperties": {
+        "type": [
+          "string",
+          "number",
+          "integer",
+          "boolean",
+          "null"
+        ],
+        "maxLength": 240
+      }
+    },
+    "created_at": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    }
+  }
+}

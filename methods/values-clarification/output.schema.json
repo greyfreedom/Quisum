@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quisum.org/methods/values-clarification/output.schema.json",
+  "title": "Values Clarification output",
+  "allOf": [
+    {
+      "$ref": "../../schemas/method-output.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "method": {
+          "const": "values-clarification@1.0.0"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quisum.org/schemas/common.schema.json",
+  "title": "Quisum common definitions",
+  "$defs": {
+    "entityId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,31}_[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "sensitivity": {
+      "type": "string",
+      "enum": ["normal", "private", "highly_sensitive", "local_only"]
+    },
+    "topic": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
+      "pattern": "^[^\\r\\n]+$"
+    },
+    "boundedText": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["actor"],
+      "properties": {
+        "actor": {
+          "type": "string",
+          "enum": ["user", "model", "import", "system"]
+        },
+        "method": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+@[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "provider": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "context_packet_id": {
+          "$ref": "#/$defs/entityId"
+        },
+        "import_id": {
+          "$ref": "#/$defs/entityId"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"actor": {"const": "model"}},
+            "required": ["actor"]
+          },
+          "then": {
+            "required": ["method", "provider", "model", "context_packet_id"]
+          }
+        },
+        {
+          "if": {
+            "properties": {"actor": {"const": "import"}},
+            "required": ["actor"]
+          },
+          "then": {
+            "required": ["import_id"]
+          }
+        }
+      ]
+    }
+  }
+}
