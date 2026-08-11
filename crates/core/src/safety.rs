@@ -109,8 +109,11 @@ impl SafetyEngine {
                 "你有抑郁症",
                 "你有焦虑症",
                 "你有 adhd",
+                "你患有抑郁症",
+                "你患有焦虑症",
                 "你是自恋型人格",
                 "你是回避型依恋",
+                "这证明你有",
             ],
         ) {
             reasons.push(SafetyReason::DiagnosticOverclaim);
@@ -123,6 +126,7 @@ impl SafetyEngine {
                 "the hidden truth about you is",
                 "你的潜意识其实",
                 "你内心真正想要的其实",
+                "关于你的隐藏真相是",
             ],
         ) {
             reasons.push(SafetyReason::HiddenTruthOverclaim);
@@ -135,6 +139,7 @@ impl SafetyEngine {
                 "recover the hidden memory",
                 "当年你父母忽视你的时候",
                 "你压抑的童年记忆",
+                "恢复那段被压抑的记忆",
             ],
         ) {
             reasons.push(SafetyReason::FalseMemoryInduction);
@@ -147,8 +152,11 @@ impl SafetyEngine {
                 "don't leave me",
                 "i will be hurt if you leave",
                 "只有我理解你",
+                "只有我懂你",
                 "你只需要我",
                 "不要离开我",
+                "你离不开我",
+                "每天都要回来找我",
             ],
         ) {
             reasons.push(SafetyReason::DependencyLanguage);
@@ -220,6 +228,7 @@ fn indicates_imminent_self_harm(input: &str) -> bool {
             "hurt myself",
             "自杀",
             "结束生命",
+            "结束自己的生命",
             "伤害自己",
         ],
     );
@@ -285,6 +294,12 @@ fn indicates_imminent_harm_to_other(input: &str) -> bool {
             "伤害同事",
             "杀人",
             "伤害别人",
+            "杀了他",
+            "杀了她",
+            "杀了他们",
+            "伤害他",
+            "伤害她",
+            "伤害他们",
         ],
     );
     let immediate = contains_any(
@@ -314,6 +329,8 @@ fn asks_for_third_party_profile(input: &str) -> bool {
             "分析我伴侣的人格",
             "诊断我的伴侣",
             "给我同事建立人格画像",
+            "给他做人格画像",
+            "给她做人格画像",
             "秘密分析",
         ],
     )
@@ -341,6 +358,18 @@ mod tests {
     }
 
     #[test]
+    fn chinese_imminent_harm_phrases_use_the_same_crisis_route() {
+        for input in [
+            "我计划今天杀了他，刀就在旁边。",
+            "我现在准备结束自己的生命。",
+        ] {
+            let decision = SafetyEngine.screen_user_input(input);
+            assert_eq!(decision.route, SafetyRoute::Crisis);
+            assert!(!decision.allow_persistence);
+        }
+    }
+
+    #[test]
     fn ordinary_distress_does_not_become_a_crisis_by_keyword_alone() {
         let decision = SafetyEngine
             .screen_user_input("Last year I had thoughts about suicide, but I am safe now.");
@@ -351,6 +380,19 @@ mod tests {
     fn dependency_and_diagnosis_output_is_blocked() {
         let decision = SafetyEngine
             .review_generated_text("Only I understand you. This proves you have depression.");
+        assert_eq!(decision.route, SafetyRoute::Pause);
+        assert!(decision.reasons.contains(&SafetyReason::DependencyLanguage));
+        assert!(
+            decision
+                .reasons
+                .contains(&SafetyReason::DiagnosticOverclaim)
+        );
+        assert!(!decision.allow_persistence);
+    }
+
+    #[test]
+    fn chinese_dependency_and_diagnosis_output_is_blocked() {
+        let decision = SafetyEngine.review_generated_text("只有我懂你，这证明你有焦虑症。");
         assert_eq!(decision.route, SafetyRoute::Pause);
         assert!(decision.reasons.contains(&SafetyReason::DependencyLanguage));
         assert!(

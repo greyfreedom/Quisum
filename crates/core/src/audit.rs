@@ -17,12 +17,18 @@ pub enum AuditAction {
     MigrationApplied,
     /// Session created.
     SessionCreated,
+    /// User or locally validated provider message recorded.
+    MessageRecorded,
+    /// Session completed or abandoned by the user.
+    SessionCompleted,
     /// Concrete event recorded directly by the user.
     EventRecorded,
     /// Proposed event confirmed or rejected by the user.
     EventReviewed,
     /// Candidate proposed.
     CandidateProposed,
+    /// Open question accepted, answered, or closed by the user.
+    OpenQuestionReviewed,
     /// Claim recorded directly by the user as an explicit reviewed statement.
     ClaimRecorded,
     /// Claim reviewed.
@@ -45,6 +51,8 @@ pub enum AuditAction {
     ContextDispatched,
     /// Export created.
     ExportCreated,
+    /// Validated portable import completed.
+    ImportCompleted,
     /// Backup created.
     BackupCreated,
     /// Restore completed.

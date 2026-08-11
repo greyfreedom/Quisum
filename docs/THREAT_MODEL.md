@@ -49,19 +49,20 @@ React/WebView, provider responses, MCP hosts, imported content, and method packa
 | Prompt injection in memory | Privilege escalation/exfiltration | Treat memory as quoted data, separate system policy, outbound authorization after model selection |
 | Model confirms/deletes a claim | Integrity loss | Actor capabilities enforced in Core; MCP exposes proposal-only mutations |
 | Removed evidence still supports a claim | False durable identity | Dependency graph, transactional cascade, re-review/regrade |
-| Tampered import | Integrity or denial of service | Versioned schema validation, size/depth limits, transaction rollback, provenance |
+| Tampered or hostile import | Integrity, credential aliasing, or denial of service | Bounded artifact/record counts, checksum, full lifecycle/provenance graph validation, provider disable/reference rotation, empty-target requirement, transaction rollback |
 | WebView compromise | Vault access | Domain-only Tauri commands, narrow capability allowlist, CSP, no SQL plugin/shell access |
 | Provider receives `local_only` text | Irreversible disclosure | Final outbound policy scan and tests independent of retrieval ranking |
 | Logs/crashes contain content | Secondary disclosure | Structured redacted logging, crash upload off, content-free errors |
 | Symlink/path traversal in backup/export | File overwrite/disclosure | Canonicalized user-selected paths, exclusive creation, archive entry validation |
 | Rollback or migration failure | Data loss | Transactional migrations, schema compatibility check, pre-migration encrypted backup |
 | Dependency or release compromise | Code execution | Locked dependencies, review automation, reproducible metadata, signed release artifacts |
-| Local brute force | Disclosure | Argon2id password derivation, rate-limited unlock UI, strong password guidance |
-| Malicious method package | Unsafe advice/exfiltration | Manifest validation, explicit install/trust, no code execution in method content |
+| Provider redirect/proxy surprise | Unintended disclosure | No redirects, no ambient proxy inheritance, cloud HTTPS-only, local loopback-only profiles, final profile-policy check before dispatch |
+| Local brute force | Disclosure | Bounded Argon2id password derivation and strong passphrase guidance; no network unlock endpoint |
+| Malicious method package | Unsafe advice/exfiltration | Strict bounded layout/manifest/schema validation, symlink/path containment, explicit local methods root, no executable package content |
 
 ## MCP authorization matrix
 
-Model-host identities may search eligible memory, fetch bounded records, build context packets, record session summaries, and submit candidates. They cannot confirm/reject/delete, export all data, change privacy/encryption, unlock a vault, read raw sessions in bulk, or clear a vault.
+Model-host identities may search eligible memory, fetch bounded eligible records, build a context packet for the host, and submit event/claim/open-question/experiment/counterevidence proposals. They cannot confirm, reject, delete, export, import, back up, restore, change privacy/encryption, manage credentials, unlock a vault, read raw sessions in bulk, or clear a vault.
 
 CLI/Desktop user identities may perform review and administrative operations only after local authorization. Destructive operations require an explicit confirmation and write an audit event.
 
@@ -75,4 +76,4 @@ Tests must cover locked-vault access, wrong keys, migration rollback, proposal-o
 
 ## Residual risks
 
-A compromised OS account can capture an unlocked process; a provider can retain data the user authorized; crisis classification can miss or over-trigger; qualitative model output can still be persuasive; deletion cannot recall content already disclosed to a provider; and platform keyrings inherit platform security. These limitations are disclosed in product UI and documentation.
+A compromised OS account can capture an unlocked process; a provider can retain data the user authorized; DNS can map a user-configured cloud hostname unexpectedly; crisis classification can miss or over-trigger; qualitative model output can still be persuasive; deletion cannot recall content already disclosed to a provider; portable checksums are not signatures; and platform keyrings inherit platform security. These limitations are disclosed in product UI and documentation.

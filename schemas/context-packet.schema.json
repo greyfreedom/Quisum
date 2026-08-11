@@ -12,6 +12,7 @@
     "provider_profile_id",
     "model",
     "query",
+    "query_sensitivity",
     "items",
     "exclusions",
     "requires_approval",
@@ -30,6 +31,10 @@
     "provider_profile_id": {"$ref": "common.schema.json#/$defs/entityId"},
     "model": {"type": "string", "minLength": 1, "maxLength": 160},
     "query": {"$ref": "common.schema.json#/$defs/boundedText"},
+    "query_sensitivity": {
+      "type": "string",
+      "enum": ["normal", "private", "highly_sensitive"]
+    },
     "items": {
       "type": "array",
       "maxItems": 64,
@@ -98,15 +103,25 @@
   "allOf": [
     {
       "if": {
-        "properties": {
-          "items": {
-            "contains": {
-              "properties": {"sensitivity": {"const": "highly_sensitive"}},
-              "required": ["sensitivity"]
-            }
+        "anyOf": [
+          {
+            "properties": {
+              "query_sensitivity": {"const": "highly_sensitive"}
+            },
+            "required": ["query_sensitivity"]
+          },
+          {
+            "properties": {
+              "items": {
+                "contains": {
+                  "properties": {"sensitivity": {"const": "highly_sensitive"}},
+                  "required": ["sensitivity"]
+                }
+              }
+            },
+            "required": ["items"]
           }
-        },
-        "required": ["items"]
+        ]
       },
       "then": {
         "properties": {"requires_approval": {"const": true}}
@@ -134,14 +149,25 @@
         "required": ["requires_approval"]
       },
       "then": {
-        "properties": {
-          "items": {
-            "contains": {
-              "properties": {"sensitivity": {"const": "highly_sensitive"}},
-              "required": ["sensitivity"]
-            }
+        "anyOf": [
+          {
+            "properties": {
+              "query_sensitivity": {"const": "highly_sensitive"}
+            },
+            "required": ["query_sensitivity"]
+          },
+          {
+            "properties": {
+              "items": {
+                "contains": {
+                  "properties": {"sensitivity": {"const": "highly_sensitive"}},
+                  "required": ["sensitivity"]
+                }
+              }
+            },
+            "required": ["items"]
           }
-        }
+        ]
       },
       "else": {
         "properties": {

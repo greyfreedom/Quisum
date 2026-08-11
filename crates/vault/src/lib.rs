@@ -1,10 +1,18 @@
 #![doc = "SQLCipher-backed local persistence for Quisum."]
 #![forbid(unsafe_code)]
 
+mod backup;
 mod error;
 mod key;
+mod key_store;
 mod migration;
+mod portable;
+mod provider_store;
+mod recovery;
+mod retrieval;
+mod session_store;
 mod store;
+mod views;
 
 use std::{
     ffi::OsString,
@@ -19,15 +27,24 @@ use parking_lot::Mutex;
 use quisum_core::{Actor, AuditAction, AuditDetails, AuditEvent, EntityId, EntityKind, Validate};
 use rusqlite::{Connection, OpenFlags, OptionalExtension, params};
 
+pub use backup::{BackupReceipt, RestoredVault};
 pub use error::VaultError;
 pub use key::VaultKey;
+pub use key_store::OsSecretStore;
 pub use migration::LATEST_SCHEMA_VERSION;
+pub use portable::{
+    ExportFormat, ExportManifest, ExportReceipt, ImportReceipt, MarkdownExportReceipt,
+};
+pub use recovery::RecoveryKeyEnvelope;
+pub use session_store::SessionDeletionImpact;
 pub use store::{DeletionImpact, EvidenceProposal, ReviewCommit};
+pub use views::ReflogEntry;
 
 /// A verified connection to one encrypted local vault.
 pub struct SqlCipherVault {
     path: PathBuf,
     connection: Mutex<Connection>,
+    key: VaultKey,
 }
 
 impl std::fmt::Debug for SqlCipherVault {
@@ -56,42 +73,43 @@ impl SqlCipherVault {
                 source,
             })?;
         }
-        let file = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&path)
-            .map_err(|source| {
-                if source.kind() == std::io::ErrorKind::AlreadyExists {
-                    VaultError::AlreadyExists
-                } else {
-                    VaultError::FileSystem {
-                        path: path.clone(),
-                        source,
-                    }
-                }
-            })?;
-        let mut guard = NewVaultGuard::new(path.clone());
+        let options = &mut OpenOptions::new();
+        options.write(true).create_new(true);
         #[cfg(unix)]
         {
-            use std::os::unix::fs::PermissionsExt as _;
-
-            if let Err(source) = file.set_permissions(fs::Permissions::from_mode(0o600)) {
-                drop(file);
-                return Err(VaultError::FileSystem {
+            use std::os::unix::fs::OpenOptionsExt as _;
+            options.mode(0o600);
+        }
+        let file = options.open(&path).map_err(|source| {
+            if source.kind() == std::io::ErrorKind::AlreadyExists {
+                VaultError::AlreadyExists
+            } else {
+                VaultError::FileSystem {
                     path: path.clone(),
                     source,
-                });
+                }
             }
-        }
+        })?;
+        let mut guard = NewVaultGuard::new(path.clone());
         drop(file);
 
         let mut connection = open_connection(&path)?;
         configure_cipher(&connection, key)?;
-        migration::migrate(&mut connection)?;
+        let applied_migrations = migration::migrate(&mut connection)?;
 
         let vault_id = EntityId::new(EntityKind::Vault);
         let created_at = Utc::now();
         let transaction = connection.transaction()?;
+        for version in applied_migrations {
+            let audit = AuditEvent::new(
+                Actor::system().kind(),
+                AuditAction::MigrationApplied,
+                Some(vault_id.clone()),
+                AuditDetails::Migration { version },
+                created_at,
+            );
+            store::insert_audit(&transaction, &audit)?;
+        }
         transaction.execute(
             "INSERT INTO vault_metadata(key, value) VALUES
              ('vault_id', ?1),
@@ -118,19 +136,38 @@ impl SqlCipherVault {
         Ok(Self {
             path,
             connection: Mutex::new(connection),
+            key: key.duplicate(),
         })
     }
 
     /// Open and verify an existing encrypted vault.
     pub fn open(path: impl AsRef<Path>, key: &VaultKey) -> Result<Self, VaultError> {
-        let path = path.as_ref().to_path_buf();
+        Self::open_internal(path.as_ref(), key, true)
+    }
+
+    pub(crate) fn open_verified_restore(path: &Path, key: &VaultKey) -> Result<Self, VaultError> {
+        Self::open_internal(path, key, false)
+    }
+
+    fn open_internal(
+        path: &Path,
+        key: &VaultKey,
+        create_migration_snapshot: bool,
+    ) -> Result<Self, VaultError> {
+        let path = path.to_path_buf();
         if !path.is_file() {
             return Err(VaultError::NotFound);
         }
         let mut connection = open_connection(&path)?;
         configure_cipher(&connection, key)?;
         verify_integrity(&connection)?;
-        migration::migrate(&mut connection)?;
+        let before_version: u32 =
+            connection.pragma_query_value(None, "user_version", |row| row.get(0))?;
+        if create_migration_snapshot && before_version > 0 && before_version < LATEST_SCHEMA_VERSION
+        {
+            backup::create_pre_migration_snapshot(&connection, &path, before_version)?;
+        }
+        let applied_migrations = migration::migrate(&mut connection)?;
         verify_integrity(&connection)?;
         let vault_id: String = connection.query_row(
             "SELECT value FROM vault_metadata WHERE key = 'vault_id'",
@@ -140,6 +177,16 @@ impl SqlCipherVault {
         let vault_id = EntityId::from_str(&vault_id)?;
         let opened_at = Utc::now();
         let transaction = connection.transaction()?;
+        for version in applied_migrations {
+            let audit = AuditEvent::new(
+                Actor::system().kind(),
+                AuditAction::MigrationApplied,
+                Some(vault_id.clone()),
+                AuditDetails::Migration { version },
+                opened_at,
+            );
+            store::insert_audit(&transaction, &audit)?;
+        }
         let audit = AuditEvent::new(
             Actor::system().kind(),
             AuditAction::VaultUnlocked,
@@ -152,6 +199,7 @@ impl SqlCipherVault {
         Ok(Self {
             path,
             connection: Mutex::new(connection),
+            key: key.duplicate(),
         })
     }
 
@@ -209,7 +257,7 @@ impl SqlCipherVault {
     }
 }
 
-fn open_connection(path: &Path) -> Result<Connection, VaultError> {
+pub(crate) fn open_connection(path: &Path) -> Result<Connection, VaultError> {
     Connection::open_with_flags(
         path,
         OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_FULL_MUTEX,
@@ -217,7 +265,7 @@ fn open_connection(path: &Path) -> Result<Connection, VaultError> {
     .map_err(VaultError::from)
 }
 
-fn configure_cipher(connection: &Connection, key: &VaultKey) -> Result<(), VaultError> {
+pub(crate) fn configure_cipher(connection: &Connection, key: &VaultKey) -> Result<(), VaultError> {
     let literal = key.sqlcipher_literal();
     connection
         .pragma_update(None, "key", literal.as_str())
@@ -379,6 +427,42 @@ mod tests {
             }
         }
         drop(vault);
+        Ok(())
+    }
+
+    #[test]
+    fn opening_an_older_schema_creates_an_encrypted_pre_migration_snapshot()
+    -> Result<(), Box<dyn Error>> {
+        let directory = tempdir()?;
+        let path = directory.path().join("vault.db");
+        let key = VaultKey::generate()?;
+        let vault = SqlCipherVault::create(&path, &key)?;
+        {
+            let connection = vault.connection.lock();
+            connection.execute_batch("DROP TRIGGER schema_migrations_no_delete")?;
+            connection.execute(
+                "DELETE FROM schema_migrations WHERE version = ?1",
+                [LATEST_SCHEMA_VERSION],
+            )?;
+            connection.pragma_update(None, "user_version", LATEST_SCHEMA_VERSION - 1)?;
+        }
+        drop(vault);
+
+        let reopened = SqlCipherVault::open(&path, &key)?;
+        assert_eq!(reopened.schema_version()?, LATEST_SCHEMA_VERSION);
+        let snapshot = fs::read_dir(directory.path())?
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .find(|candidate| {
+                let marker = format!(".pre-migration-v{}-", LATEST_SCHEMA_VERSION - 1);
+                candidate
+                    .file_name()
+                    .is_some_and(|name| name.to_string_lossy().contains(&marker))
+            })
+            .ok_or("pre-migration snapshot not found")?;
+        let bytes = fs::read(snapshot)?;
+        assert!(bytes.len() >= 16);
+        assert_ne!(&bytes[..16], b"SQLite format 3\0");
         Ok(())
     }
 

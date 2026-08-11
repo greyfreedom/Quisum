@@ -7,11 +7,28 @@ rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 
+[[bin]]
+name = "quisum"
+path = "src/main.rs"
+
 [lints]
 workspace = true
 
 [dependencies]
+chrono.workspace = true
+clap.workspace = true
+directories.workspace = true
+futures-util.workspace = true
 quisum-core = { path = "../core" }
 quisum-mcp = { path = "../mcp" }
 quisum-providers = { path = "../providers" }
 quisum-vault = { path = "../vault" }
+rpassword.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+zeroize.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

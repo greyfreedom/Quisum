@@ -64,6 +64,8 @@ pub struct MemoryCandidate {
     pub crisis_related: bool,
     /// Whether local retrieval determined it relevant to the declared purpose.
     pub relevant: bool,
+    /// Whether the selected provider profile permits this sensitivity class.
+    pub policy_allowed: bool,
     /// Content-free explanation for relevance.
     pub selection_reason: String,
     /// Higher values rank first after correction priority.
@@ -141,6 +143,8 @@ pub struct ContextPacket {
     pub model: String,
     /// Current user request.
     pub query: String,
+    /// Sensitivity of the current request itself.
+    pub query_sensitivity: Sensitivity,
     /// Included untrusted records.
     pub items: Vec<ContextItem>,
     /// Excluded record IDs and reasons.
@@ -195,10 +199,11 @@ impl ContextPacket {
     /// Perform the last deterministic egress check before provider I/O.
     pub fn authorize_egress(&self) -> Result<(), DomainError> {
         self.validate()?;
-        if self
-            .items
-            .iter()
-            .any(|item| !item.sensitivity.provider_eligible())
+        if !self.query_sensitivity.provider_eligible()
+            || self
+                .items
+                .iter()
+                .any(|item| !item.sensitivity.provider_eligible())
         {
             return Err(DomainError::InvalidValue("context.local_only"));
         }
@@ -221,13 +226,17 @@ impl Validate for ContextPacket {
         validate_method_id(&self.method, "context.method")?;
         validate_text(&self.model, 160, "context.model")?;
         validate_text(&self.query, 4_000, "context.query")?;
+        if !self.query_sensitivity.provider_eligible() {
+            return Err(DomainError::InvalidValue("context.query_sensitivity"));
+        }
         if self.items.len() > 64 || self.exclusions.len() > 128 {
             return Err(DomainError::InvalidValue("context.item_limit"));
         }
-        let has_highly_sensitive = self
-            .items
-            .iter()
-            .any(|item| item.sensitivity == Sensitivity::HighlySensitive);
+        let has_highly_sensitive = self.query_sensitivity == Sensitivity::HighlySensitive
+            || self
+                .items
+                .iter()
+                .any(|item| item.sensitivity == Sensitivity::HighlySensitive);
         if has_highly_sensitive != self.requires_approval {
             return Err(DomainError::InvalidValue("context.requires_approval"));
         }
@@ -297,6 +306,7 @@ impl ContextBuilder {
         provider_profile_id: EntityId,
         model: impl Into<String>,
         query: impl Into<String>,
+        query_sensitivity: Sensitivity,
         mut candidates: Vec<MemoryCandidate>,
         created_at: DateTime<Utc>,
     ) -> Result<ContextPacket, DomainError> {
@@ -341,9 +351,10 @@ impl ContextBuilder {
             });
         }
 
-        let requires_approval = items
-            .iter()
-            .any(|item| item.sensitivity.requires_explicit_approval());
+        let requires_approval = query_sensitivity.requires_explicit_approval()
+            || items
+                .iter()
+                .any(|item| item.sensitivity.requires_explicit_approval());
         let packet = ContextPacket {
             schema_version: "1.0.0".to_owned(),
             id: EntityId::new(EntityKind::Context),
@@ -352,6 +363,7 @@ impl ContextBuilder {
             provider_profile_id,
             model: model.into(),
             query: query.into(),
+            query_sensitivity,
             items,
             exclusions,
             requires_approval,
@@ -370,6 +382,9 @@ fn exclusion_reason(candidate: &MemoryCandidate) -> Option<ExclusionReason> {
     }
     if candidate.crisis_related {
         return Some(ExclusionReason::CrisisRelated);
+    }
+    if !candidate.policy_allowed {
+        return Some(ExclusionReason::TopicPolicy);
     }
     match candidate.state {
         MemoryState::PendingReview => return Some(ExclusionReason::PendingReview),
@@ -425,6 +440,7 @@ mod tests {
             state,
             crisis_related: false,
             relevant: true,
+            policy_allowed: true,
             selection_reason: "Synthetic relevance.".to_owned(),
             relevance_score,
             recorded_at: Utc::now(),
@@ -448,6 +464,7 @@ mod tests {
             EntityId::new(EntityKind::Provider),
             "synthetic-model",
             "A synthetic query",
+            Sensitivity::Private,
             vec![
                 candidate(
                     ContextItemType::Claim,
@@ -499,6 +516,7 @@ mod tests {
             EntityId::new(EntityKind::Provider),
             "synthetic-model",
             "Synthetic query",
+            Sensitivity::Private,
             vec![claim, correction],
             Utc::now(),
         )?;
@@ -517,6 +535,7 @@ mod tests {
             EntityId::new(EntityKind::Provider),
             "synthetic-model",
             "Synthetic query",
+            Sensitivity::Private,
             vec![candidate(
                 ContextItemType::Event,
                 Sensitivity::HighlySensitive,
@@ -533,6 +552,27 @@ mod tests {
     }
 
     #[test]
+    fn highly_sensitive_query_requires_approval_even_without_memory() -> Result<(), Box<dyn Error>>
+    {
+        let mut packet = ContextBuilder::new(4)?.build(
+            Actor::user(),
+            "Synthetic purpose",
+            "free-reflection@1.0.0",
+            EntityId::new(EntityKind::Provider),
+            "synthetic-model",
+            "Synthetic highly sensitive query",
+            Sensitivity::HighlySensitive,
+            Vec::new(),
+            Utc::now(),
+        )?;
+        assert!(packet.requires_approval);
+        assert!(packet.authorize_egress().is_err());
+        packet.approve(Actor::user(), Utc::now())?;
+        assert!(packet.authorize_egress().is_ok());
+        Ok(())
+    }
+
+    #[test]
     fn model_host_cannot_mark_a_context_packet_dispatched() -> Result<(), Box<dyn Error>> {
         let builder = ContextBuilder::new(4)?;
         let mut packet = builder.build(
@@ -542,6 +582,7 @@ mod tests {
             EntityId::new(EntityKind::Provider),
             "synthetic-model",
             "Synthetic query",
+            Sensitivity::Private,
             vec![candidate(
                 ContextItemType::Claim,
                 Sensitivity::Private,

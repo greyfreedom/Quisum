@@ -25,6 +25,22 @@ impl VaultKey {
         Self(bytes)
     }
 
+    pub(crate) const fn duplicate(&self) -> Self {
+        Self(self.0)
+    }
+
+    pub(crate) const fn bytes(&self) -> &[u8; Self::LENGTH] {
+        &self.0
+    }
+
+    pub(crate) fn matches(&self, other: &Self) -> bool {
+        let mut difference = 0_u8;
+        for (left, right) in self.0.iter().zip(other.0.iter()) {
+            difference |= left ^ right;
+        }
+        difference == 0
+    }
+
     pub(crate) fn sqlcipher_literal(&self) -> Zeroizing<String> {
         Zeroizing::new(format!("x'{}'", hex::encode(self.0.as_slice())))
     }

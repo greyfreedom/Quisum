@@ -212,6 +212,7 @@ fn runtime_domain_objects_match_public_schemas() -> Result<(), Box<dyn Error>> {
         EntityId::new(EntityKind::Provider),
         "synthetic-model",
         "A bounded query",
+        Sensitivity::Private,
         vec![MemoryCandidate {
             item_type: ContextItemType::Claim,
             item_id: claim.id.clone(),
@@ -220,6 +221,7 @@ fn runtime_domain_objects_match_public_schemas() -> Result<(), Box<dyn Error>> {
             state: MemoryState::Confirmed,
             crisis_related: false,
             relevant: true,
+            policy_allowed: true,
             selection_reason: "Directly relevant reviewed claim.".to_owned(),
             relevance_score: 100,
             recorded_at: now,
