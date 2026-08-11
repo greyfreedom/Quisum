@@ -1,0 +1,4 @@
+interface:
+  display_name: "Quisum Periodic Review"
+  short_description: "Review changes, contradictions, questions, and experiments"
+  default_prompt: "Use $quisum-periodic-review to review my recent Quisum evidence."

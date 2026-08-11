@@ -1,0 +1,4 @@
+interface:
+  display_name: "Quisum Free Reflection"
+  short_description: "Guide open reflection with governed Quisum proposals"
+  default_prompt: "Use $quisum-free-reflection to help me reflect without forcing a conclusion."

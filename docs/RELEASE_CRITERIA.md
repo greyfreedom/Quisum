@@ -2,12 +2,15 @@
 
 A release candidate is not V1.0 until all criteria below are evidenced in CI or release documentation.
 
+Current evidence and open gates are tracked in [V1 readiness](V1_READINESS.md) and the machine-readable [release record](../release/readiness.json). A checked box in a maintainer self-review cannot substitute for required independent, professional, live-service, signing, or clean-platform evidence.
+
 ## Functional
 
 - The shortest loop—event, candidate, evidence/counterevidence, human review, reflog, export—works through CLI and desktop.
 - MCP can perform bounded search and proposal operations and is unable to invoke human-only operations.
 - Independent chat works with OpenAI, Anthropic, OpenAI-compatible, and local HTTP profiles, including streaming and connection tests.
 - All seven official methods load, validate, and pass their invariant evals.
+- All eight cross-host Agent Skills validate, match canonical method references, install without overwrite for Codex and Claude Code, and use only the least-privilege MCP contract.
 - Self Map, Review, Timeline, Reflog, Experiments, Privacy & Models, and Explore flows are usable without direct database access.
 
 ## Data and recovery
@@ -36,5 +39,5 @@ A release candidate is not V1.0 until all criteria below are evidenced in CI or 
 
 - Windows, macOS, and Linux artifacts build in CI and publish checksums and provenance.
 - Applicable artifacts are signed; unsigned development artifacts are visibly labeled.
-- Installation, vault recovery, provider configuration, privacy, deletion, and migration guides are tested from a clean environment.
+- Installation, host-AI setup, vault recovery, provider configuration, privacy, deletion, and migration guides are tested from a clean environment.
 - License, security reporting, contribution, code of conduct, changelog, and third-party notices are present.

@@ -8,7 +8,7 @@ The primary assets are vault plaintext, encryption and API keys, attachments, ba
 
 - The legitimate local user.
 - A curious or malicious local process running as the same OS user.
-- A compromised or malicious MCP host.
+- A compromised or malicious MCP host or installed Agent Skill.
 - Prompt injection embedded in stored or imported text.
 - A remote model provider or network intermediary.
 - A malicious method package, import, attachment, or dependency update.
@@ -37,7 +37,7 @@ SQLCipher vault <-> secret store
         +---- restricted MCP surface
 ```
 
-React/WebView, provider responses, MCP hosts, imported content, and method packages are not trusted with database capability. Rust Core is the policy boundary. The vault is trusted only after key verification and migrations complete.
+React/WebView, provider responses, MCP hosts, Agent Skills, imported content, and method packages are not trusted with database capability. Rust Core is the policy boundary. The vault is trusted only after key verification and migrations complete.
 
 ## Threats and mitigations
 
@@ -46,6 +46,7 @@ React/WebView, provider responses, MCP hosts, imported content, and method packa
 | Copied database or backup | Disclosure | SQLCipher, strong derived keys, encrypted verified backups, no plaintext temp copies |
 | API key in config/logs | Provider compromise | OS/password secret store, redaction, typed secret wrappers |
 | Malicious MCP host requests all data | Disclosure | Purpose-bound queries, strict limits, sensitivity filtering, no raw SQL/full-vault tool |
+| Tampered Agent Skill asks for shell or raw-vault access | Disclosure or integrity loss | Inspectable no-overwrite packages, no executable skill assets, MCP-only documented workflow, and Core capability enforcement even when host instructions are malicious |
 | Prompt injection in memory | Privilege escalation/exfiltration | Treat memory as quoted data, separate system policy, outbound authorization after model selection |
 | Model confirms/deletes a claim | Integrity loss | Actor capabilities enforced in Core; MCP exposes proposal-only mutations |
 | Removed evidence still supports a claim | False durable identity | Dependency graph, transactional cascade, re-review/regrade |
@@ -58,7 +59,7 @@ React/WebView, provider responses, MCP hosts, imported content, and method packa
 | Logs/crashes contain content | Secondary disclosure | Structured redacted logging, crash upload off, content-free errors |
 | Symlink/path traversal in backup/export | File overwrite/disclosure | Canonicalized user-selected paths, exclusive creation, archive entry validation |
 | Rollback or migration failure | Data loss | Transactional migrations, schema compatibility check, pre-migration encrypted backup |
-| Dependency or release compromise | Code execution | Locked dependencies, review automation, reproducible metadata, signed release artifacts |
+| Dependency, skill, or release compromise | Code execution or unsafe host guidance | Locked dependencies, canonical skill-reference sync, symlink/special-file rejection, no-overwrite installation, review automation, reproducible metadata, signed release artifacts |
 | Provider redirect/proxy surprise | Unintended disclosure | No redirects, no ambient proxy inheritance, cloud HTTPS-only, local loopback-only profiles, final profile-policy check before dispatch |
 | Local brute force | Disclosure | Bounded Argon2id password derivation and strong passphrase guidance; no network unlock endpoint |
 | Malicious method package | Unsafe advice/exfiltration | Strict bounded layout/manifest/schema validation, symlink/path containment, explicit local methods root, no executable package content |
@@ -75,10 +76,10 @@ SQLCipher provides encryption at rest and page authentication when correctly con
 
 ## Security test obligations
 
-Tests must cover locked-vault access, wrong keys, migration rollback, proposal-only MCP permissions, `local_only` egress rejection, highly-sensitive approval, prompt-injection quoting, logging redaction, backup tampering, path traversal, deletion cascade, and crash-safe transactions.
+Tests must cover locked-vault access, wrong keys, migration rollback, proposal-only MCP permissions, skill/reference drift and install collisions, `local_only` egress rejection, highly-sensitive approval, prompt-injection quoting, logging redaction, backup tampering, path traversal, deletion cascade, and crash-safe transactions.
 
 Safety releases also require the executable offline eval gate. That gate is not model certification. A supported provider/model claim needs a complete strict result file for the exact adapter, model, capability class, prompt bundle, and timestamp.
 
 ## Residual risks
 
-A compromised OS account can capture an unlocked process; a provider can retain data the user authorized; DNS can map a user-configured cloud hostname unexpectedly; crisis classification can miss or over-trigger; qualitative model output can still be persuasive; deletion cannot recall content already disclosed to a provider; portable checksums are not signatures; and platform keyrings inherit platform security. These limitations are disclosed in product UI and documentation.
+A compromised OS account can capture an unlocked process; a host AI or provider can retain conversation and bounded memory the user authorized; an installed skill can be modified after installation; DNS can map a user-configured cloud hostname unexpectedly; crisis classification can miss or over-trigger; qualitative model output can still be persuasive; deletion cannot recall content already disclosed to a host/provider; portable checksums are not signatures; and platform keyrings inherit platform security. These limitations are disclosed in product UI and documentation.

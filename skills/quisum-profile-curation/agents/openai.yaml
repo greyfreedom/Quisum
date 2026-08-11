@@ -1,0 +1,4 @@
+interface:
+  display_name: "Quisum Profile Curation"
+  short_description: "Curate evidence-backed proposals for human review"
+  default_prompt: "Use $quisum-profile-curation to turn this conversation into reviewable proposals."

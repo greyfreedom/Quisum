@@ -1,0 +1,288 @@
+name: Draft release
+
+on:
+  push:
+    tags:
+      - "v1.*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    name: Release gates
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      # actions/checkout v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - name: Require an annotated, GitHub-verified signed tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$(git cat-file -t "$GITHUB_REF")" = "tag" || { echo "::error::Release tags must be annotated."; exit 1; }
+          git cat-file tag "$GITHUB_REF" | grep -Eq -- '-----BEGIN (PGP|SSH) SIGNATURE-----' || {
+            echo "::error::Release tags must carry a PGP or SSH signature."
+            exit 1
+          }
+          tag_object="$(git rev-parse "$GITHUB_REF")"
+          verified="$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$tag_object" --jq .verification.verified)"
+          reason="$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$tag_object" --jq .verification.reason)"
+          test "$verified" = "true" || {
+            echo "::error::GitHub did not verify the tag signature (reason: $reason)."
+            exit 1
+          }
+      - name: Keep stable publishing disabled until signing integration is reviewed
+        if: ${{ !contains(github.ref_name, '-') }}
+        run: |
+          echo "::error::Stable release automation is intentionally disabled while signing and external-review gates are open."
+          exit 1
+      - name: Install Linux desktop prerequisites
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
+      # actions/setup-node v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22.13.0
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      # dtolnay/rust-toolchain stable, pinned 2026-08-12
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
+        with:
+          toolchain: 1.88.0
+          components: rustfmt, clippy
+      # Swatinem/rust-cache v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+      - run: npm ci --prefix apps/desktop
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+      - run: cargo test --workspace --all-features --locked
+      - name: Build Rust documentation
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --workspace --all-features --no-deps --locked
+      - run: cargo run --locked -p quisum-evals --bin quisum-eval -- --json
+      - run: node scripts/validate-assets.mjs
+      - run: node scripts/check-skills.mjs
+      - run: bash scripts/check-workflows.sh
+      - run: node scripts/generate-notices.mjs --check
+      - run: npm run check --prefix apps/desktop
+      - run: npm run build --prefix apps/desktop
+      - run: node scripts/check-release.mjs --tag "${GITHUB_REF_NAME}"
+
+  create_release:
+    name: Create draft release
+    needs: guard
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    outputs:
+      release_id: ${{ steps.release.outputs.release_id }}
+    steps:
+      - id: release
+        name: Create or reuse an unpublished draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            draft="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" --jq .draft)"
+            test "$draft" = "true" || { echo "::error::Refusing to mutate an already published release."; exit 1; }
+            prerelease="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" --jq .prerelease)"
+            test "$prerelease" = "true" || { echo "::error::Existing draft is not marked as a prerelease."; exit 1; }
+            release_tag="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" --jq .tag_name)"
+            test "$release_tag" = "$tag" || { echo "::error::Existing draft targets a different tag."; exit 1; }
+          else
+            gh release create "$tag" --repo "$GITHUB_REPOSITORY" --verify-tag --draft --prerelease \
+              --title "Quisum $tag — UNSIGNED release candidate" \
+              --notes "Automated unsigned V1.0 release candidate. Verify SHA256SUMS and GitHub provenance before use. Stable publication remains blocked by release/readiness.json."
+          fi
+          release_id="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" --jq .id)"
+          echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
+
+  desktop:
+    name: Desktop bundle (${{ matrix.label }})
+    needs: create_release
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            label: linux-x86_64
+            args: "-- --locked"
+            rust_targets: ""
+          - os: macos-latest
+            label: macos-aarch64
+            args: "--target aarch64-apple-darwin -- --locked"
+            rust_targets: aarch64-apple-darwin
+          - os: macos-latest
+            label: macos-x86_64
+            args: "--target x86_64-apple-darwin -- --locked"
+            rust_targets: x86_64-apple-darwin
+          - os: windows-latest
+            label: windows-x86_64
+            args: "-- --locked"
+            rust_targets: ""
+    steps:
+      # actions/checkout v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Install Linux desktop prerequisites
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
+      # actions/setup-node v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22.13.0
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      # dtolnay/rust-toolchain stable, pinned 2026-08-12
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
+        with:
+          toolchain: 1.88.0
+          targets: ${{ matrix.rust_targets }}
+      # Swatinem/rust-cache v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+      - run: npm ci --prefix apps/desktop
+      # tauri-apps/tauri-action v1
+      - uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: apps/desktop
+          releaseId: ${{ needs.create_release.outputs.release_id }}
+          tagName: ${{ github.ref_name }}
+          releaseDraft: true
+          prerelease: true
+          uploadUpdaterJson: false
+          uploadUpdaterSignatures: false
+          args: ${{ matrix.args }}
+
+  cli:
+    name: CLI package (${{ matrix.label }})
+    needs: [create_release, desktop]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            label: linux-x86_64
+            rust_target: ""
+            binary: target/release/quisum
+          - os: macos-latest
+            label: macos-aarch64
+            rust_target: aarch64-apple-darwin
+            binary: target/aarch64-apple-darwin/release/quisum
+          - os: macos-latest
+            label: macos-x86_64
+            rust_target: x86_64-apple-darwin
+            binary: target/x86_64-apple-darwin/release/quisum
+          - os: windows-latest
+            label: windows-x86_64
+            rust_target: ""
+            binary: target/release/quisum.exe
+    steps:
+      # actions/checkout v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      # actions/setup-node v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22.13.0
+      # dtolnay/rust-toolchain stable, pinned 2026-08-12
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
+        with:
+          toolchain: 1.88.0
+          targets: ${{ matrix.rust_target }}
+      # Swatinem/rust-cache v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+      - name: Build CLI
+        shell: bash
+        env:
+          RUST_TARGET: ${{ matrix.rust_target }}
+        run: |
+          if test -n "$RUST_TARGET"; then
+            cargo build --release --locked --bin quisum --target "$RUST_TARGET"
+          else
+            cargo build --release --locked --bin quisum
+          fi
+      - name: Package CLI on Unix
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p dist
+          version="${GITHUB_REF_NAME#v}"
+          package="dist/quisum-cli-${version}-${PLATFORM_LABEL}"
+          node scripts/package-cli.mjs --binary "$CLI_BINARY" --output "$package" --platform "$PLATFORM_LABEL"
+          tar -czf "${package}.tar.gz" -C "$package" .
+          gh release upload "$GITHUB_REF_NAME" "${package}.tar.gz" --repo "$GITHUB_REPOSITORY" --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PLATFORM_LABEL: ${{ matrix.label }}
+          CLI_BINARY: ${{ matrix.binary }}
+      - name: Package CLI on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PLATFORM_LABEL: ${{ matrix.label }}
+          CLI_BINARY: ${{ matrix.binary }}
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          $version = $env:GITHUB_REF_NAME.Substring(1)
+          $package = "dist/quisum-cli-$version-$env:PLATFORM_LABEL"
+          node scripts/package-cli.mjs --binary $env:CLI_BINARY --output $package --platform $env:PLATFORM_LABEL
+          Compress-Archive -Path "$package/*" -DestinationPath "$package.zip"
+          gh release upload $env:GITHUB_REF_NAME "$package.zip" --repo $env:GITHUB_REPOSITORY --clobber
+
+  metadata:
+    name: Checksums, SBOM, and provenance
+    needs: [desktop, cli]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      # actions/checkout v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      # actions/setup-node v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22.13.0
+      - name: Download all draft assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p dist/release
+          gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --dir dist/release
+      # anchore/sbom-action v0
+      - uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610
+        with:
+          path: .
+          format: spdx-json
+          output-file: dist/release/quisum-${{ github.ref_name }}.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+      - run: node scripts/checksums.mjs --root dist/release --output dist/release/SHA256SUMS
+      # actions/attest-build-provenance v3
+      - uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a
+        with:
+          subject-path: dist/release/*
+      - name: Upload release metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "$GITHUB_REF_NAME" dist/release/SHA256SUMS dist/release/quisum-${GITHUB_REF_NAME}.spdx.json \
+            --repo "$GITHUB_REPOSITORY" --clobber

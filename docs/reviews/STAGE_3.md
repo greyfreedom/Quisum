@@ -65,7 +65,7 @@ RUSTDOCFLAGS="-D warnings" cargo doc --workspace --all-features --no-deps
   passed
 
 cargo check --workspace --all-targets --all-features
-  passed with rustc 1.95.0; the declared 1.85 MSRV remains a CI release gate
+  passed with rustc 1.95.0; that stage declared Rust 1.85. The final RC lockfile audit later raised the enforced baseline to Rust 1.88 (see Stage 6).
 
 git diff --check
   passed

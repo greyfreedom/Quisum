@@ -23,8 +23,9 @@ All primary data lives in an encrypted local vault. Cloud model calls receive a 
 - CLI and local stdio MCP server with least-privilege tools
 - OpenAI, Anthropic, OpenAI-compatible, and local HTTP provider adapters
 - Seven versioned reflection method packages
+- Eight installable Codex and Claude Code Agent Skills backed by those method packages
 - Tauri 2 + React reference desktop application
-- JSON/JSONL/Markdown import and export
+- JSON/JSONL import and export, plus derived Markdown export
 - Safety, privacy-leakage, contradiction, and overclaiming evaluations
 - Windows, macOS, and Linux release workflows
 
@@ -45,17 +46,27 @@ methods + policies
    CLI MCP Desktop
 ```
 
-The adapters reuse the same core authorization, lifecycle, retrieval, and safety rules. React never receives raw database access. MCP intentionally excludes confirmation, deletion, full export, and privacy-policy mutation tools.
+The adapters reuse the same core authorization, lifecycle, retrieval, and safety rules. Agent Skills are cross-host facilitation adapters whose generated references stay synchronized with the canonical methods; they never receive direct vault access. React never receives raw database access. MCP intentionally excludes confirmation, deletion, full export, and privacy-policy mutation tools.
 
 ## Project status
 
-V1.0 implementation is in progress. No real personal data belongs in this source repository; fixtures are synthetic.
+The complete V1.0 feature set is available as **`1.0.0-rc.1`**. It is a release candidate, not a stable V1.0 release: independent security review, qualified professional review of the bundled methods, live provider compatibility evidence, clean-install validation, and platform signing are still open gates. Official methods therefore remain visibly marked `unreviewed`, and development artifacts are unsigned.
 
-Start with [the project charter](docs/PROJECT_CHARTER.md), [architecture](docs/ARCHITECTURE.md), and [threat model](docs/THREAT_MODEL.md). Contributors should read [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
+No real personal data belongs in this source repository; fixtures are synthetic. See the machine-readable [release readiness record](release/readiness.json) and the human-readable [V1 readiness matrix](docs/V1_READINESS.md) for what has and has not been established.
+
+## Start here
+
+- [Install or build Quisum](docs/guides/INSTALLATION.md)
+- [Create and recover a vault](docs/guides/RECOVERY.md)
+- [Configure a model provider](docs/guides/PROVIDERS.md)
+- [Install Agent Skills and connect Codex or Claude Code](docs/guides/HOST_AI.md)
+- [Understand privacy, export, and deletion](docs/guides/PRIVACY_AND_DELETION.md)
+
+Project foundations are in the [charter](docs/PROJECT_CHARTER.md), [architecture](docs/ARCHITECTURE.md), and [threat model](docs/THREAT_MODEL.md). Contributors should read [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Safety
 
-Quisum is a reflective tool, not medical care, psychotherapy, diagnosis, or an emergency service. In an immediate crisis, contact local emergency services and a trusted person nearby. The runtime stops identity analysis when acute-risk language is detected and does not promote crisis statements into long-term claims.
+Quisum is a reflective tool, not medical care, psychotherapy, diagnosis, or an emergency service. If anyone may be in immediate danger, contact local emergency services now or go to the nearest emergency department. The runtime stops identity analysis when acute-risk language is detected and does not promote crisis statements into long-term claims. Detection is conservative and cannot guarantee that it will recognize every crisis.
 
 ## License
 

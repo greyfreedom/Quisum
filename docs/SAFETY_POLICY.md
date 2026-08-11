@@ -41,6 +41,8 @@ Pending, rejected, crisis-related, expired, irrelevant highly sensitive, and `lo
 
 Safety routing applies to the complete user-authored durable payload, not only its headline field. Event topics, claim contexts and alternatives, review edits and notes, session titles, context purposes and queries, experiment expectations, results, and learning notes are rechecked at the Vault boundary. An adapter that omits a field-level precheck therefore cannot persist acute-risk text through a secondary field.
 
+Official Agent Skills perform a host-side preflight before any Quisum read or write call. When immediate danger is credible, they stop the reflection/curation method, do not retrieve or persist Quisum memory, encourage local emergency or emergency-department help and a nearby trusted person when safe, and avoid identity analysis. This prompt-side behavior is defense in depth; deterministic Core/Vault safety checks remain authoritative because an installed skill or host can be modified.
+
 ## Evaluation gates
 
 Changes to prompts, retrieval, claim extraction, crisis logic, or provider handling require cases covering overdiagnosis, overconfidence, false memory, contradiction, dependency, crisis behavior, and privacy leakage. A release fails when a critical safety invariant is violated, even if conversational quality improves.

@@ -13,6 +13,9 @@ quisum-vault
    ^    ^    ^
    |    |    |
  CLI   MCP  Tauri commands <-> React UI
+        ^
+        |
+ cross-host Agent Skills <-> Codex / Claude Code
 ```
 
 `quisum-core` contains domain types, authorization, claim state transitions, safety screening, retrieval eligibility, context-packet construction, and import/export contracts. It has no dependency on Tauri, MCP transport, provider HTTP protocols, or SQLite.
@@ -24,6 +27,8 @@ The versioned crisis resource pack is embedded into Core so CLI and desktop use 
 `quisum-providers` implements a provider-neutral streaming and structured-generation trait for OpenAI Responses, Anthropic Messages, OpenAI-compatible Chat Completions, and loopback HTTP. Redirects and ambient proxies are disabled, request/response sizes and deadlines are bounded, and cloud profiles require HTTPS. It cannot decide which vault material may be sent; it accepts an already-approved and dispatch-audited context packet.
 
 `quisum-cli`, `quisum-mcp`, and the Tauri adapter are delivery surfaces. All call the same Core and Vault policy boundaries. Adapters may validate presentation-specific input, but durable lifecycle, safety, provenance, and privacy invariants are enforced again below the adapter boundary.
+
+The eight installable Agent Skills are host adapters, not policy enforcement. Seven generated references mirror the canonical method manifests, facilitator instructions, safety rules, memory policies, and output schemas; the curation reference mirrors every method's memory policy. CI rejects stale snapshots. Skills may use only the exposed MCP reads and pending-proposal writes, and they fall back to an explicitly non-persistent conversation when MCP or valid provenance is unavailable.
 
 ## Core flow
 

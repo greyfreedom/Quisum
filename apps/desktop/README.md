@@ -15,7 +15,13 @@ From this directory:
 ```sh
 npm ci
 npm run check
-npm run tauri dev
+npm run tauri -- dev -- --locked
 ```
 
-Development builds are unsigned. See the repository release guide before distributing artifacts.
+To create a local, unsigned application bundle:
+
+```sh
+CI=true npm run tauri -- build --no-sign -- --locked
+```
+
+`CI=true` makes the macOS DMG path noninteractive by skipping Finder-only icon positioning. Development and local bundles are unsigned. Do not redistribute them as official releases. See the repository [installation guide](../../docs/guides/INSTALLATION.md), [release process](../../docs/RELEASE_PROCESS.md), and [readiness record](../../release/readiness.json) before distributing artifacts.

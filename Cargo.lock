@@ -3387,7 +3387,7 @@ dependencies = [
 
 [[package]]
 name = "quisum-cli"
-version = "0.1.0"
+version = "1.0.0-rc.1"
 dependencies = [
  "chrono",
  "clap",
@@ -3408,7 +3408,7 @@ dependencies = [
 
 [[package]]
 name = "quisum-core"
-version = "0.1.0"
+version = "1.0.0-rc.1"
 dependencies = [
  "chrono",
  "jsonschema",
@@ -3422,7 +3422,7 @@ dependencies = [
 
 [[package]]
 name = "quisum-desktop"
-version = "0.1.0"
+version = "1.0.0-rc.1"
 dependencies = [
  "chrono",
  "directories",
@@ -3440,7 +3440,7 @@ dependencies = [
 
 [[package]]
 name = "quisum-evals"
-version = "0.1.0"
+version = "1.0.0-rc.1"
 dependencies = [
  "chrono",
  "clap",
@@ -3454,7 +3454,7 @@ dependencies = [
 
 [[package]]
 name = "quisum-mcp"
-version = "0.1.0"
+version = "1.0.0-rc.1"
 dependencies = [
  "chrono",
  "quisum-core",
@@ -3469,7 +3469,7 @@ dependencies = [
 
 [[package]]
 name = "quisum-providers"
-version = "0.1.0"
+version = "1.0.0-rc.1"
 dependencies = [
  "async-trait",
  "bytes",
@@ -3487,7 +3487,7 @@ dependencies = [
 
 [[package]]
 name = "quisum-vault"
-version = "0.1.0"
+version = "1.0.0-rc.1"
 dependencies = [
  "argon2",
  "base64 0.22.1",

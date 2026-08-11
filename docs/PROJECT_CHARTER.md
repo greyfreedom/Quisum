@@ -43,4 +43,4 @@ Changes that weaken human confirmation, provenance, deletion consistency, least 
 
 ## V1.0 definition
 
-V1.0 requires stable schemas and migrations; encrypted local storage and backups; functioning CLI, MCP, providers, and desktop adapters; seven versioned method packages; local semantic retrieval; Windows/macOS/Linux release automation; provider compatibility tests; and complete user, privacy, safety, threat-model, recovery, and contribution documentation.
+V1.0 requires stable schemas and migrations; encrypted local storage and backups; functioning CLI, MCP, providers, and desktop adapters; seven versioned method packages; eight installable Codex/Claude Code Agent Skills; local semantic retrieval; Windows/macOS/Linux release automation; provider compatibility tests; and complete user, privacy, safety, threat-model, recovery, host-AI, and contribution documentation.

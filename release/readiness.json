@@ -1,0 +1,80 @@
+{
+  "$schema": "../schemas/release-readiness.schema.json",
+  "schema_version": "1.0.0",
+  "release_version": "1.0.0-rc.1",
+  "release_channel": "release-candidate",
+  "updated_at": "2026-08-12",
+  "summary": "The V1.0 implementation and automated release-candidate pipeline are complete. Stable V1.0 remains blocked by independent security review, qualified professional method review, live provider evidence, clean-install validation, and applicable platform signing.",
+  "gates": [
+    {
+      "id": "repository-quality",
+      "status": "complete",
+      "required_for_stable": true,
+      "evidence": "docs/reviews/STAGE_6.md",
+      "note": "Repository-wide maintainer audit and reproducible local quality commands; this is not an independent review."
+    },
+    {
+      "id": "cross-platform-build-automation",
+      "status": "complete",
+      "required_for_stable": true,
+      "evidence": ".github/workflows/ci.yml",
+      "note": "Windows, macOS, and Linux jobs are defined; successful hosted-run evidence must be linked for a promoted release."
+    },
+    {
+      "id": "release-metadata-automation",
+      "status": "complete",
+      "required_for_stable": true,
+      "evidence": ".github/workflows/release.yml",
+      "note": "Draft release automation generates checksums, an SPDX JSON SBOM, and GitHub build provenance."
+    },
+    {
+      "id": "crisis-resource-source-check",
+      "status": "complete",
+      "required_for_stable": true,
+      "evidence": "resources/crisis/README.md",
+      "note": "Named public-authority sources were checked on 2026-08-12; this is not professional crisis-service review."
+    },
+    {
+      "id": "independent-security-review",
+      "status": "open",
+      "required_for_stable": true,
+      "evidence": null,
+      "note": "No independent security report has been completed."
+    },
+    {
+      "id": "professional-method-review",
+      "status": "open",
+      "required_for_stable": true,
+      "evidence": null,
+      "note": "All seven official method manifests accurately remain unreviewed."
+    },
+    {
+      "id": "live-provider-compatibility",
+      "status": "open",
+      "required_for_stable": true,
+      "evidence": null,
+      "note": "Protocol fixtures pass, but no complete bounded live-provider matrix has been accepted."
+    },
+    {
+      "id": "clean-install-validation",
+      "status": "open",
+      "required_for_stable": true,
+      "evidence": null,
+      "note": "The guides and automation exist, but clean-device validation on every supported platform is pending."
+    },
+    {
+      "id": "macos-code-signing",
+      "status": "open",
+      "required_for_stable": true,
+      "evidence": null,
+      "note": "No Apple signing/notarization identity or signed artifact evidence is configured."
+    },
+    {
+      "id": "windows-code-signing",
+      "status": "open",
+      "required_for_stable": true,
+      "evidence": null,
+      "note": "No Windows Authenticode identity or signed artifact evidence is configured."
+    }
+  ]
+}

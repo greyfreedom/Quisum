@@ -1,0 +1,4 @@
+interface:
+  display_name: "Quisum Decision Reflection"
+  short_description: "Reflect on a decision without taking agency away"
+  default_prompt: "Use $quisum-decision-reflection to help me examine a decision."

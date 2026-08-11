@@ -1,0 +1,4 @@
+interface:
+  display_name: "Quisum Values Clarification"
+  short_description: "Clarify values through choices, tensions, and actions"
+  default_prompt: "Use $quisum-values-clarification to explore what matters in this situation."
