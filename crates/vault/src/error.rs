@@ -64,6 +64,24 @@ pub enum VaultError {
     /// Operating-system entropy was unavailable.
     #[error("secure random generation failed")]
     RandomUnavailable,
+    /// A recovery envelope is malformed, unsupported, or exceeds safe work limits.
+    #[error("recovery key envelope is invalid")]
+    InvalidRecoveryEnvelope,
+    /// Wrong recovery passphrase or authenticated envelope tampering.
+    #[error("recovery failed: the passphrase is wrong or the envelope was modified")]
+    RecoveryFailed,
+    /// The platform credential service is unavailable or rejected the operation.
+    #[error("operating-system secret store is unavailable")]
+    SecretStoreUnavailable,
+    /// No secret exists under the requested opaque reference.
+    #[error("secret was not found")]
+    SecretNotFound,
+    /// A backup or portable artifact is malformed or exceeds a safety limit.
+    #[error("vault artifact is invalid")]
+    InvalidArtifact,
+    /// A backup payload failed its authenticated checksum or database verification.
+    #[error("vault artifact was modified or is corrupt")]
+    ArtifactTampered,
     /// Requested record was not found.
     #[error("vault record not found")]
     NotFoundRecord,

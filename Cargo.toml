@@ -27,15 +27,32 @@ unwrap_used = "deny"
 expect_used = "deny"
 
 [workspace.dependencies]
+argon2 = { version = "0.5.3", default-features = false, features = ["alloc", "password-hash"] }
+async-trait = "0.1.89"
+base64 = "0.22.1"
+bytes = "1.11.1"
+chacha20poly1305 = { version = "0.10.1", features = ["std"] }
 chrono = { version = "0.4.45", default-features = false, features = ["clock", "serde", "std"] }
+clap = { version = "4.6.0", features = ["derive"] }
+directories = "6.0.0"
+futures-util = "0.3.32"
 getrandom = "0.4.3"
 hex = "0.4.3"
+keyring = { version = "4.1.5", default-features = false, features = ["v1"] }
 parking_lot = "0.12.5"
+reqwest = { version = "0.13.4", default-features = false, features = ["charset", "http2", "json", "rustls", "stream"] }
+rpassword = "7.4.0"
+rmcp = { version = "2.2.0", default-features = false, features = ["macros", "schemars", "server", "transport-io"] }
 rusqlite = { version = "0.40.1", default-features = false, features = ["backup", "bundled-sqlcipher-vendored-openssl", "chrono", "limits", "modern_sqlite", "serde_json"] }
+schemars = "1.2.1"
+secrecy = "0.10.3"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
+serde_yaml_ng = "0.10.0"
 sha2 = "0.11.0"
 tempfile = "3.23.0"
 thiserror = "2.0.19"
+tokio = { version = "1.53.0", features = ["io-std", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
 ulid = { version = "3.0.0", features = ["serde"] }
+url = { version = "2.5.8", features = ["serde"] }
 zeroize = { version = "1.9.0", features = ["derive"] }

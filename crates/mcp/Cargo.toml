@@ -11,5 +11,14 @@ license.workspace = true
 workspace = true
 
 [dependencies]
+chrono.workspace = true
 quisum-core = { path = "../core" }
 quisum-vault = { path = "../vault" }
+rmcp.workspace = true
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

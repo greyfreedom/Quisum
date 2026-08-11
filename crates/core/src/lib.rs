@@ -10,9 +10,12 @@ mod error;
 mod event;
 mod experiment;
 mod id;
+mod method;
 mod open_question;
+mod provider;
 mod safety;
 mod sensitivity;
+mod session;
 mod source;
 mod validation;
 
@@ -31,9 +34,16 @@ pub use error::DomainError;
 pub use event::{Event, EventStatus};
 pub use experiment::{BehavioralExperiment, ExperimentRisk, ExperimentStatus};
 pub use id::{EntityId, EntityKind};
+pub use method::{
+    MethodError, MethodFiles, MethodManifest, MethodMemoryPolicy, MethodPackage,
+    MethodRequirements, MethodRetrievalPolicy, MethodReview, MethodReviewStatus,
+    OFFICIAL_METHOD_IDS,
+};
 pub use open_question::{OpenQuestion, OpenQuestionStatus};
+pub use provider::{PrivacyKind, ProviderCapabilities, ProviderKind, ProviderProfile};
 pub use safety::{SafetyDecision, SafetyEngine, SafetyReason, SafetyRoute};
 pub use sensitivity::Sensitivity;
+pub use session::{MessageRole, ReflectionSession, SessionMessage, SessionStatus};
 pub use source::{Source, SourceActor};
 pub use validation::Validate;
 

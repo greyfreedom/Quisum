@@ -2,8 +2,9 @@ use chrono::{DateTime, SecondsFormat, Utc};
 use quisum_core::{
     Actor, ActorKind, AuditAction, AuditDetails, AuditEvent, BehavioralExperiment, Capability,
     Claim, ClaimKind, ClaimRevision, ClaimStatus, ContextItemType, ContextPacket, EntityId,
-    EntityKind, Event, EventStatus, ExperimentStatus, OpenQuestion, ReviewOutcome, ReviewRequest,
-    SafetyEngine, Source, SourceActor, UserCorrection, UserReview, Validate,
+    EntityKind, Event, EventStatus, ExperimentStatus, OpenQuestion, OpenQuestionStatus,
+    ProviderProfile, ReviewOutcome, ReviewRequest, SafetyEngine, SessionMessage, Source,
+    SourceActor, UserCorrection, UserReview, Validate,
 };
 use rusqlite::{ErrorCode, OptionalExtension, Transaction, TransactionBehavior, params};
 use serde::Serialize;
@@ -63,6 +64,7 @@ impl SqlCipherVault {
 
         let mut connection = self.connection.lock();
         let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        require_context_provider_policy(&transaction, packet)?;
         require_context_items_eligible(&transaction, packet)?;
         transaction
             .execute(
@@ -145,6 +147,7 @@ impl SqlCipherVault {
         let mut connection = self.connection.lock();
         let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let mut packet = load_context_packet(&transaction, packet_id)?;
+        require_context_provider_policy(&transaction, &packet)?;
         packet.mark_dispatched(actor, dispatched_at)?;
         update_context_packet(&transaction, &packet)?;
         let audit = AuditEvent::new(
@@ -207,6 +210,8 @@ impl SqlCipherVault {
             .map_err(map_constraint)?;
         if event.status == EventStatus::Confirmed {
             insert_event_search_index(&transaction, event)?;
+        } else {
+            crate::retrieval::remove_embedding(&transaction, &event.id)?;
         }
         let audit = AuditEvent::new(
             actor.kind(),
@@ -274,6 +279,8 @@ impl SqlCipherVault {
         )?;
         if event.status == EventStatus::Confirmed {
             insert_event_search_index(&transaction, &event)?;
+        } else {
+            crate::retrieval::remove_embedding(&transaction, &event.id)?;
         }
         let audit = AuditEvent::new(
             actor.kind(),
@@ -698,6 +705,7 @@ impl SqlCipherVault {
                     "DELETE FROM claims_fts WHERE id = ?1",
                     [claim.id.to_string()],
                 )?;
+                crate::retrieval::remove_embedding(&transaction, &claim.id)?;
                 purged_pending_claims.push(claim.id);
                 continue;
             }
@@ -717,6 +725,7 @@ impl SqlCipherVault {
             "DELETE FROM events_fts WHERE id = ?1",
             [event_id.to_string()],
         )?;
+        crate::retrieval::remove_embedding(&transaction, event_id)?;
         let affected_count = affected_claims.len() + purged_pending_claims.len();
         let audit = AuditEvent::new(
             actor.kind(),
@@ -786,6 +795,22 @@ impl SqlCipherVault {
                     .join(" ")
             ],
         )?;
+        crate::retrieval::upsert_embedding(
+            &transaction,
+            &correction.id,
+            ContextItemType::Correction,
+            &format!(
+                "{}\n{}",
+                correction.statement,
+                correction
+                    .topics
+                    .iter()
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            ),
+            correction.updated_at,
+        )?;
         let audit = AuditEvent::new(
             actor.kind(),
             AuditAction::CorrectionRecorded,
@@ -796,6 +821,139 @@ impl SqlCipherVault {
         insert_audit(&transaction, &audit)?;
         transaction.commit()?;
         Ok(())
+    }
+
+    /// Persist a bounded open-question candidate without turning it into an identity claim.
+    pub fn insert_open_question_record(
+        &self,
+        actor: Actor,
+        question: &OpenQuestion,
+    ) -> Result<(), VaultError> {
+        actor.require(Capability::ProposeOpenQuestion)?;
+        question.validate()?;
+        require_source_actor(actor.kind(), question.source.actor)?;
+        if question.crisis_related {
+            return Err(quisum_core::DomainError::SafetyBlocked.into());
+        }
+        match actor.kind() {
+            ActorKind::ModelHost | ActorKind::Import
+                if question.status != OpenQuestionStatus::Proposed =>
+            {
+                return Err(quisum_core::DomainError::InvalidValue("open_question.status").into());
+            }
+            ActorKind::User
+                if !matches!(
+                    question.status,
+                    OpenQuestionStatus::Proposed | OpenQuestionStatus::Open
+                ) =>
+            {
+                return Err(quisum_core::DomainError::InvalidValue("open_question.status").into());
+            }
+            ActorKind::User | ActorKind::System | ActorKind::ModelHost | ActorKind::Import => {}
+        }
+        let payload = serde_json::to_string(question)?;
+        require_safe_model_output(&question.source, &payload)?;
+        let mut connection = self.connection.lock();
+        let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let model_context = require_dispatched_model_context(&transaction, &question.source)?;
+        for claim_id in &question.related_claims {
+            let claim = load_claim(&transaction, claim_id)?;
+            if !matches!(
+                claim.status,
+                ClaimStatus::Confirmed | ClaimStatus::Revised | ClaimStatus::Contradicted
+            ) || model_context
+                .as_ref()
+                .is_some_and(|packet| !packet.items.iter().any(|item| item.item_id == *claim_id))
+            {
+                return Err(
+                    quisum_core::DomainError::InvalidValue("open_question.related_claims").into(),
+                );
+            }
+        }
+        insert_open_question(&transaction, question)?;
+        let audit = AuditEvent::new(
+            actor.kind(),
+            AuditAction::CandidateProposed,
+            Some(question.id.clone()),
+            AuditDetails::None,
+            question.created_at,
+        );
+        insert_audit(&transaction, &audit)?;
+        transaction.commit()?;
+        Ok(())
+    }
+
+    /// Accept, answer, or close an open question through an explicit human decision.
+    pub fn review_open_question(
+        &self,
+        actor: Actor,
+        question_id: &EntityId,
+        target: OpenQuestionStatus,
+        reviewed_at: DateTime<Utc>,
+    ) -> Result<OpenQuestion, VaultError> {
+        actor.require(Capability::ReviewOpenQuestion)?;
+        if actor.kind() != ActorKind::User {
+            return Err(quisum_core::DomainError::Forbidden(Capability::ReviewOpenQuestion).into());
+        }
+        question_id.require_kind(EntityKind::OpenQuestion)?;
+        let mut connection = self.connection.lock();
+        let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let payload = transaction
+            .query_row(
+                "SELECT payload_json FROM open_questions WHERE id = ?1",
+                [question_id.to_string()],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?
+            .ok_or(VaultError::NotFoundRecord)?;
+        let mut question: OpenQuestion = serde_json::from_str(&payload)?;
+        if reviewed_at < question.created_at {
+            return Err(quisum_core::DomainError::InvalidValue("open_question.reviewed_at").into());
+        }
+        let previous = question.status;
+        question.transition(actor, target)?;
+        transaction.execute(
+            "UPDATE open_questions SET status = ?2, payload_json = ?3 WHERE id = ?1",
+            params![
+                question.id.to_string(),
+                enum_token(&question.status)?,
+                serde_json::to_string(&question)?
+            ],
+        )?;
+        crate::retrieval::remove_embedding(&transaction, &question.id)?;
+        if question.status == OpenQuestionStatus::Open {
+            crate::retrieval::upsert_embedding(
+                &transaction,
+                &question.id,
+                ContextItemType::OpenQuestion,
+                &format!(
+                    "{}\n{}",
+                    question.question,
+                    question
+                        .contexts
+                        .iter()
+                        .cloned()
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                ),
+                reviewed_at,
+            )?;
+        }
+        insert_audit(
+            &transaction,
+            &AuditEvent::new(
+                actor.kind(),
+                AuditAction::OpenQuestionReviewed,
+                Some(question.id.clone()),
+                AuditDetails::Lifecycle {
+                    from: enum_token(&previous)?,
+                    to: enum_token(&question.status)?,
+                },
+                reviewed_at,
+            ),
+        )?;
+        transaction.commit()?;
+        Ok(question)
     }
 
     /// Persist a behavioral-experiment proposal or user-reviewed state.
@@ -854,6 +1012,21 @@ impl SqlCipherVault {
                 ],
             )
             .map_err(map_constraint)?;
+        if experiment.status == ExperimentStatus::Active {
+            crate::retrieval::upsert_embedding(
+                &transaction,
+                &experiment.id,
+                ContextItemType::Experiment,
+                &format!(
+                    "{}\n{}\n{}\n{}",
+                    experiment.title,
+                    experiment.hypothesis,
+                    experiment.prediction,
+                    experiment.action
+                ),
+                experiment.planned_at,
+            )?;
+        }
         let audit = AuditEvent::new(
             actor.kind(),
             AuditAction::CandidateProposed,
@@ -1043,6 +1216,42 @@ fn load_context_packet(
     Ok(packet)
 }
 
+fn load_provider_profile(
+    transaction: &Transaction<'_>,
+    profile_id: &EntityId,
+) -> Result<ProviderProfile, VaultError> {
+    profile_id.require_kind(EntityKind::Provider)?;
+    let payload = transaction
+        .query_row(
+            "SELECT payload_json FROM provider_profiles WHERE id = ?1",
+            [profile_id.to_string()],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()?
+        .ok_or(VaultError::NotFoundRecord)?;
+    let profile: ProviderProfile = serde_json::from_str(&payload)?;
+    profile.validate()?;
+    Ok(profile)
+}
+
+fn require_context_provider_policy(
+    transaction: &Transaction<'_>,
+    packet: &ContextPacket,
+) -> Result<ProviderProfile, VaultError> {
+    let profile = load_provider_profile(transaction, &packet.provider_profile_id)?;
+    if !profile.enabled
+        || profile.model != packet.model
+        || !profile.trusts(packet.query_sensitivity)
+        || packet
+            .items
+            .iter()
+            .any(|item| !profile.trusts(item.sensitivity))
+    {
+        return Err(quisum_core::DomainError::InvalidValue("context.provider_policy").into());
+    }
+    Ok(profile)
+}
+
 fn require_context_items_eligible(
     transaction: &Transaction<'_>,
     packet: &ContextPacket,
@@ -1051,8 +1260,11 @@ fn require_context_items_eligible(
         let sensitivity = enum_token(&item.sensitivity)?;
         let query = match item.item_type {
             ContextItemType::Message => {
-                "SELECT payload_json FROM messages
-                 WHERE id = ?1 AND sensitivity = ?2 AND crisis_related = 0"
+                "SELECT m.payload_json FROM messages m
+                 JOIN sessions s ON s.id = m.session_id
+                 WHERE m.id = ?1 AND m.role = 'user'
+                   AND m.sensitivity = ?2 AND m.crisis_related = 0
+                   AND s.status != 'deleted'"
             }
             ContextItemType::SessionSummary => {
                 "SELECT payload_json FROM session_summaries
@@ -1094,16 +1306,57 @@ fn require_context_items_eligible(
             .ok_or(quisum_core::DomainError::InvalidValue(
                 "context.item_eligibility",
             ))?;
-        if item.item_type == ContextItemType::Claim {
-            let claim: Claim = serde_json::from_str(&payload)?;
-            claim.validate()?;
-            if claim.kind == ClaimKind::CurrentState
-                && claim
-                    .revisit_after
-                    .is_some_and(|revisit| revisit <= packet.created_at)
-            {
-                return Err(quisum_core::DomainError::InvalidValue("context.expired_claim").into());
+        let expected_excerpt = match item.item_type {
+            ContextItemType::Message => {
+                let message: SessionMessage = serde_json::from_str(&payload)?;
+                message.validate()?;
+                crate::retrieval::context_excerpt(&message.content)
             }
+            ContextItemType::SessionSummary => continue,
+            ContextItemType::Event => {
+                let event: Event = serde_json::from_str(&payload)?;
+                event.validate()?;
+                crate::retrieval::context_excerpt(&format!(
+                    "{}\n{}",
+                    event.title,
+                    event.facts.join("\n")
+                ))
+            }
+            ContextItemType::Claim => {
+                let claim: Claim = serde_json::from_str(&payload)?;
+                claim.validate()?;
+                if claim.kind == ClaimKind::CurrentState
+                    && claim
+                        .revisit_after
+                        .is_some_and(|revisit| revisit <= packet.created_at)
+                {
+                    return Err(
+                        quisum_core::DomainError::InvalidValue("context.expired_claim").into(),
+                    );
+                }
+                crate::retrieval::context_excerpt(&claim.statement)
+            }
+            ContextItemType::Correction => {
+                let correction: UserCorrection = serde_json::from_str(&payload)?;
+                correction.validate()?;
+                crate::retrieval::context_excerpt(&correction.statement)
+            }
+            ContextItemType::OpenQuestion => {
+                let question: OpenQuestion = serde_json::from_str(&payload)?;
+                question.validate()?;
+                crate::retrieval::context_excerpt(&question.question)
+            }
+            ContextItemType::Experiment => {
+                let experiment: BehavioralExperiment = serde_json::from_str(&payload)?;
+                experiment.validate()?;
+                crate::retrieval::context_excerpt(&format!(
+                    "{}\n{}",
+                    experiment.title, experiment.hypothesis
+                ))
+            }
+        };
+        if item.excerpt != expected_excerpt {
+            return Err(quisum_core::DomainError::InvalidValue("context.item_excerpt").into());
         }
     }
     Ok(())
@@ -1131,7 +1384,7 @@ fn update_context_packet(
     Ok(())
 }
 
-fn require_dispatched_model_context(
+pub(crate) fn require_dispatched_model_context(
     transaction: &Transaction<'_>,
     source: &Source,
 ) -> Result<Option<ContextPacket>, VaultError> {
@@ -1147,9 +1400,11 @@ fn require_dispatched_model_context(
             ))?;
     let packet = load_context_packet(transaction, packet_id)?;
     packet.authorize_egress()?;
+    let profile = load_provider_profile(transaction, &packet.provider_profile_id)?;
     if packet.dispatched_at.is_none()
         || source.method.as_deref() != Some(packet.method.as_str())
         || source.model.as_deref() != Some(packet.model.as_str())
+        || source.provider.as_deref() != Some(profile.name.as_str())
     {
         return Err(quisum_core::DomainError::InvalidValue("source.context_packet_id").into());
     }
@@ -1213,6 +1468,20 @@ fn update_experiment(
     if changed != 1 {
         return Err(VaultError::NotFoundRecord);
     }
+    if experiment.status == ExperimentStatus::Active {
+        crate::retrieval::upsert_embedding(
+            transaction,
+            &experiment.id,
+            ContextItemType::Experiment,
+            &format!(
+                "{}\n{}\n{}\n{}",
+                experiment.title, experiment.hypothesis, experiment.prediction, experiment.action
+            ),
+            experiment.planned_at,
+        )?;
+    } else {
+        crate::retrieval::remove_embedding(transaction, &experiment.id)?;
+    }
     Ok(())
 }
 
@@ -1235,7 +1504,7 @@ fn insert_experiment_audit(
     insert_audit(transaction, &audit)
 }
 
-fn insert_event_search_index(
+pub(crate) fn insert_event_search_index(
     transaction: &Transaction<'_>,
     event: &Event,
 ) -> Result<(), VaultError> {
@@ -1249,6 +1518,19 @@ fn insert_event_search_index(
             event.interpretations.join("\n"),
             event.topics.iter().cloned().collect::<Vec<_>>().join(" ")
         ],
+    )?;
+    crate::retrieval::upsert_embedding(
+        transaction,
+        &event.id,
+        ContextItemType::Event,
+        &format!(
+            "{}\n{}\n{}\n{}",
+            event.title,
+            event.facts.join("\n"),
+            event.interpretations.join("\n"),
+            event.topics.iter().cloned().collect::<Vec<_>>().join(" ")
+        ),
+        event.recorded_at,
     )?;
     Ok(())
 }
@@ -1274,10 +1556,25 @@ fn insert_claim_search_index(
             claim.alternative_explanations.join("\n")
         ],
     )?;
+    crate::retrieval::upsert_embedding(
+        transaction,
+        &claim.id,
+        ContextItemType::Claim,
+        &format!(
+            "{}\n{}\n{}",
+            claim.statement,
+            claim.contexts.iter().cloned().collect::<Vec<_>>().join(" "),
+            claim.alternative_explanations.join("\n")
+        ),
+        claim.updated_at,
+    )?;
     Ok(())
 }
 
-fn insert_claim_projection(transaction: &Transaction<'_>, claim: &Claim) -> Result<(), VaultError> {
+pub(crate) fn insert_claim_projection(
+    transaction: &Transaction<'_>,
+    claim: &Claim,
+) -> Result<(), VaultError> {
     let payload = serde_json::to_string(claim)?;
     transaction
         .execute(
@@ -1306,7 +1603,10 @@ fn insert_claim_projection(transaction: &Transaction<'_>, claim: &Claim) -> Resu
     Ok(())
 }
 
-fn update_claim_projection(transaction: &Transaction<'_>, claim: &Claim) -> Result<(), VaultError> {
+pub(crate) fn update_claim_projection(
+    transaction: &Transaction<'_>,
+    claim: &Claim,
+) -> Result<(), VaultError> {
     claim.validate()?;
     let changed = transaction.execute(
         "UPDATE claims
@@ -1334,6 +1634,7 @@ fn update_claim_projection(transaction: &Transaction<'_>, claim: &Claim) -> Resu
         "DELETE FROM claims_fts WHERE id = ?1",
         [claim.id.to_string()],
     )?;
+    crate::retrieval::remove_embedding(transaction, &claim.id)?;
     if claim_is_searchable(claim.status) {
         insert_claim_search_index(transaction, claim)?;
     }
@@ -1418,7 +1719,8 @@ fn require_eligible_evidence(
         )?,
         EntityKind::Message => transaction.query_row(
             "SELECT EXISTS(
-               SELECT 1 FROM messages WHERE id = ?1 AND crisis_related = 0
+               SELECT 1 FROM messages
+               WHERE id = ?1 AND role = 'user' AND crisis_related = 0
              )",
             [evidence_id.to_string()],
             |row| row.get(0),
@@ -1461,7 +1763,10 @@ fn require_eligible_evidence(
     }
 }
 
-fn insert_review(transaction: &Transaction<'_>, review: &UserReview) -> Result<(), VaultError> {
+pub(crate) fn insert_review(
+    transaction: &Transaction<'_>,
+    review: &UserReview,
+) -> Result<(), VaultError> {
     transaction.execute(
         "INSERT INTO user_reviews(id, claim_id, decision, reviewed_at, payload_json)
          VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -1476,7 +1781,7 @@ fn insert_review(transaction: &Transaction<'_>, review: &UserReview) -> Result<(
     Ok(())
 }
 
-fn insert_revision(
+pub(crate) fn insert_revision(
     transaction: &Transaction<'_>,
     revision: &ClaimRevision,
 ) -> Result<(), VaultError> {
@@ -1498,7 +1803,7 @@ fn insert_revision(
     Ok(())
 }
 
-fn insert_open_question(
+pub(crate) fn insert_open_question(
     transaction: &Transaction<'_>,
     question: &OpenQuestion,
 ) -> Result<(), VaultError> {
@@ -1515,6 +1820,24 @@ fn insert_open_question(
             serde_json::to_string(question)?
         ],
     )?;
+    if question.status == quisum_core::OpenQuestionStatus::Open {
+        crate::retrieval::upsert_embedding(
+            transaction,
+            &question.id,
+            ContextItemType::OpenQuestion,
+            &format!(
+                "{}\n{}",
+                question.question,
+                question
+                    .contexts
+                    .iter()
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            ),
+            question.created_at,
+        )?;
+    }
     Ok(())
 }
 
@@ -1541,18 +1864,18 @@ pub(crate) fn insert_audit(
     Ok(())
 }
 
-fn enum_token(value: &impl Serialize) -> Result<String, VaultError> {
+pub(crate) fn enum_token(value: &impl Serialize) -> Result<String, VaultError> {
     match serde_json::to_value(value)? {
         serde_json::Value::String(token) => Ok(token),
         _ => Err(quisum_core::DomainError::InvalidValue("database.enum_token").into()),
     }
 }
 
-fn format_time(value: DateTime<Utc>) -> String {
+pub(crate) fn format_time(value: DateTime<Utc>) -> String {
     value.to_rfc3339_opts(SecondsFormat::Millis, true)
 }
 
-fn map_constraint(error: rusqlite::Error) -> VaultError {
+pub(crate) fn map_constraint(error: rusqlite::Error) -> VaultError {
     match &error {
         rusqlite::Error::SqliteFailure(failure, _)
             if failure.code == ErrorCode::ConstraintViolation =>
@@ -1565,12 +1888,13 @@ fn map_constraint(error: rusqlite::Error) -> VaultError {
 
 #[cfg(test)]
 mod tests {
-    use std::error::Error;
+    use std::{collections::BTreeSet, error::Error};
 
     use chrono::Utc;
     use quisum_core::{
         ClaimKind, ContextBuilder, ContextItemType, EvidenceGrade, ExperimentRisk, MemoryCandidate,
-        MemoryState, ReviewDecision, Sensitivity, Source, UserEndorsement,
+        MemoryState, OpenQuestion, PrivacyKind, ProviderCapabilities, ProviderKind, ReviewDecision,
+        Sensitivity, Source, UserEndorsement,
     };
     use tempfile::TempDir;
 
@@ -1608,13 +1932,15 @@ mod tests {
         method: &str,
         candidates: Vec<MemoryCandidate>,
     ) -> Result<Source, Box<dyn Error>> {
+        let profile = test_provider(vault, BTreeSet::from([Sensitivity::Private]))?;
         let packet = ContextBuilder::new(1)?.build(
             Actor::model_host(),
             "Synthetic test generation",
             method,
-            EntityId::new(EntityKind::Provider),
-            "synthetic-model",
+            profile.id,
+            profile.model.clone(),
             "Synthetic test query",
+            Sensitivity::Private,
             candidates,
             Utc::now(),
         )?;
@@ -1622,16 +1948,50 @@ mod tests {
         vault.mark_context_packet_dispatched(Actor::system(), &packet.id, Utc::now())?;
         Ok(Source::model(
             method,
-            "synthetic-provider",
-            "synthetic-model",
+            profile.name,
+            profile.model,
             packet.id,
         ))
+    }
+
+    fn test_provider(
+        vault: &SqlCipherVault,
+        trusted_sensitivities: BTreeSet<Sensitivity>,
+    ) -> Result<ProviderProfile, Box<dyn Error>> {
+        let profile = ProviderProfile::new(
+            "Synthetic local",
+            ProviderKind::LocalHttp,
+            "http://127.0.0.1:11434/v1",
+            "synthetic-model",
+            PrivacyKind::Local,
+            ProviderCapabilities {
+                streaming: true,
+                tool_use: false,
+                json_schema: true,
+                vision: false,
+                context_limit: Some(8_192),
+            },
+            trusted_sensitivities,
+            None,
+            None,
+            Utc::now(),
+        );
+        vault.put_provider_profile(Actor::user(), &profile)?;
+        Ok(profile)
     }
 
     fn pending_pattern(
         vault: &SqlCipherVault,
         event_id: EntityId,
     ) -> Result<Claim, Box<dyn Error>> {
+        let event = vault
+            .get_event(Actor::user(), &event_id)?
+            .ok_or("synthetic event not found")?;
+        let excerpt = crate::retrieval::context_excerpt(&format!(
+            "{}\n{}",
+            event.title,
+            event.facts.join("\n")
+        ));
         let mut claim = Claim::proposal(
             ClaimKind::PatternHypothesis,
             "A narrow synthetic pattern may apply in one context.",
@@ -1643,14 +2003,15 @@ mod tests {
                 vec![MemoryCandidate {
                     item_type: ContextItemType::Event,
                     item_id: event_id.clone(),
-                    excerpt: "Synthetic evidence excerpt.".to_owned(),
-                    sensitivity: Sensitivity::Private,
+                    excerpt,
+                    sensitivity: event.sensitivity,
                     state: MemoryState::Confirmed,
                     crisis_related: false,
                     relevant: true,
+                    policy_allowed: true,
                     selection_reason: "Synthetic direct evidence.".to_owned(),
                     relevance_score: 100,
-                    recorded_at: Utc::now(),
+                    recorded_at: event.recorded_at,
                 }],
             )?,
             Utc::now(),
@@ -1763,6 +2124,80 @@ mod tests {
     }
 
     #[test]
+    fn model_open_question_requires_explicit_user_lifecycle_decisions() -> Result<(), Box<dyn Error>>
+    {
+        let (_directory, _key, vault) = test_vault()?;
+        let question = OpenQuestion::proposal(
+            "Could the synthetic pattern depend on a narrower context?",
+            Sensitivity::Private,
+            model_source(&vault, "pattern-validation@1.0.0")?,
+            Utc::now(),
+        );
+        let question_id = question.id.clone();
+        vault.insert_open_question_record(Actor::model_host(), &question)?;
+        assert_eq!(
+            vault
+                .get_open_question(Actor::user(), &question_id)?
+                .ok_or("question not found")?
+                .status,
+            OpenQuestionStatus::Proposed
+        );
+        assert!(
+            vault
+                .get_open_question(Actor::model_host(), &question_id)?
+                .is_none()
+        );
+        assert!(
+            vault
+                .review_open_question(
+                    Actor::model_host(),
+                    &question_id,
+                    OpenQuestionStatus::Open,
+                    Utc::now(),
+                )
+                .is_err()
+        );
+
+        let accepted = vault.review_open_question(
+            Actor::user(),
+            &question_id,
+            OpenQuestionStatus::Open,
+            Utc::now(),
+        )?;
+        assert_eq!(accepted.status, OpenQuestionStatus::Open);
+        assert!(
+            vault
+                .get_open_question(Actor::model_host(), &question_id)?
+                .is_some()
+        );
+        assert!(
+            vault
+                .search_memory(Actor::user(), "narrower context", 10)?
+                .iter()
+                .any(|candidate| candidate.item_id == question_id)
+        );
+
+        let answered = vault.review_open_question(
+            Actor::user(),
+            &question_id,
+            OpenQuestionStatus::Answered,
+            Utc::now(),
+        )?;
+        assert_eq!(answered.status, OpenQuestionStatus::Answered);
+        assert!(
+            !vault
+                .search_memory(Actor::user(), "narrower context", 10)?
+                .iter()
+                .any(|candidate| candidate.item_id == question_id)
+        );
+        assert!(vault.list_reflog(Actor::user(), 20)?.iter().any(|entry| {
+            entry.event.action == AuditAction::OpenQuestionReviewed
+                && entry.event.entity_id.as_ref() == Some(&question_id)
+        }));
+        Ok(())
+    }
+
+    #[test]
     fn counterevidence_is_only_applied_after_user_acceptance() -> Result<(), Box<dyn Error>> {
         let (_directory, _key, vault) = test_vault()?;
         let support = insert_confirmed_event(&vault, "Supporting event")?;
@@ -1778,22 +2213,25 @@ mod tests {
                 .propose_counterevidence(Actor::model_host(), &claim_id, &counter.id, None, now,)
                 .is_err()
         );
+        let profile = test_provider(&vault, BTreeSet::from([Sensitivity::Private]))?;
         let packet = ContextBuilder::new(2)?.build(
             Actor::model_host(),
             "Synthetic counterevidence review",
             "pattern-validation@1.0.0",
-            EntityId::new(EntityKind::Provider),
-            "synthetic-model",
+            profile.id,
+            profile.model,
             "Find a bounded counterexample.",
+            Sensitivity::Private,
             vec![
                 MemoryCandidate {
                     item_type: ContextItemType::Claim,
                     item_id: claim_id.clone(),
-                    excerpt: "A synthetic confirmed claim.".to_owned(),
+                    excerpt: claim.statement.clone(),
                     sensitivity: Sensitivity::Private,
                     state: MemoryState::Confirmed,
                     crisis_related: false,
                     relevant: true,
+                    policy_allowed: true,
                     selection_reason: "The claim under review.".to_owned(),
                     relevance_score: 100,
                     recorded_at: now,
@@ -1801,11 +2239,16 @@ mod tests {
                 MemoryCandidate {
                     item_type: ContextItemType::Event,
                     item_id: counter.id.clone(),
-                    excerpt: "A synthetic counterexample.".to_owned(),
+                    excerpt: crate::retrieval::context_excerpt(&format!(
+                        "{}\n{}",
+                        counter.title,
+                        counter.facts.join("\n")
+                    )),
                     sensitivity: Sensitivity::Private,
                     state: MemoryState::Confirmed,
                     crisis_related: false,
                     relevant: true,
+                    policy_allowed: true,
                     selection_reason: "Potential counterevidence.".to_owned(),
                     relevance_score: 90,
                     recorded_at: now,
@@ -2043,6 +2486,53 @@ mod tests {
                 .insert_event(Actor::model_host(), &mismatched)
                 .is_err()
         );
+
+        let mut forged_provider = mismatched;
+        forged_provider.id = EntityId::new(EntityKind::Event);
+        forged_provider.source = model_source(&vault, "event-debrief@1.0.0")?;
+        forged_provider.source.provider = Some("forged-provider-name".to_owned());
+        assert!(
+            vault
+                .insert_event(Actor::model_host(), &forged_provider)
+                .is_err()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn context_packet_excerpt_must_match_the_reviewed_projection() -> Result<(), Box<dyn Error>> {
+        let (_directory, _key, vault) = test_vault()?;
+        let event = insert_confirmed_event(&vault, "Synthetic bound excerpt")?;
+        let profile = test_provider(&vault, BTreeSet::from([Sensitivity::Private]))?;
+        let packet = ContextBuilder::new(1)?.build(
+            Actor::system(),
+            "Synthetic excerpt binding",
+            "event-debrief@1.0.0",
+            profile.id,
+            profile.model,
+            "Synthetic query",
+            Sensitivity::Private,
+            vec![MemoryCandidate {
+                item_type: ContextItemType::Event,
+                item_id: event.id,
+                excerpt: "A forged excerpt unrelated to the reviewed event.".to_owned(),
+                sensitivity: event.sensitivity,
+                state: MemoryState::Confirmed,
+                crisis_related: false,
+                relevant: true,
+                policy_allowed: true,
+                selection_reason: "synthetic_forgery_test".to_owned(),
+                relevance_score: 1_000,
+                recorded_at: event.recorded_at,
+            }],
+            Utc::now(),
+        )?;
+        assert!(matches!(
+            vault.insert_context_packet(Actor::system(), &packet),
+            Err(VaultError::Domain(quisum_core::DomainError::InvalidValue(
+                "context.item_excerpt"
+            )))
+        ));
         Ok(())
     }
 
@@ -2058,21 +2548,31 @@ mod tests {
             Sensitivity::HighlySensitive,
         );
         vault.insert_event(Actor::user(), &event)?;
+        let mut profile = test_provider(
+            &vault,
+            BTreeSet::from([Sensitivity::Private, Sensitivity::HighlySensitive]),
+        )?;
         let packet = ContextBuilder::new(1)?.build(
             Actor::model_host(),
             "Synthetic sensitive test",
             "free-reflection@1.0.0",
-            EntityId::new(EntityKind::Provider),
-            "synthetic-model",
+            profile.id.clone(),
+            profile.model.clone(),
             "Synthetic query",
+            Sensitivity::Private,
             vec![MemoryCandidate {
                 item_type: ContextItemType::Event,
                 item_id: event.id,
-                excerpt: "Synthetic highly sensitive excerpt.".to_owned(),
+                excerpt: crate::retrieval::context_excerpt(&format!(
+                    "{}\n{}",
+                    event.title,
+                    event.facts.join("\n")
+                )),
                 sensitivity: Sensitivity::HighlySensitive,
                 state: MemoryState::Confirmed,
                 crisis_related: false,
                 relevant: true,
+                policy_allowed: true,
                 selection_reason: "Synthetic direct relevance.".to_owned(),
                 relevance_score: 100,
                 recorded_at: now,
@@ -2092,6 +2592,17 @@ mod tests {
                 .approve_context_packet(Actor::user(), &packet.id, Utc::now())
                 .is_err()
         );
+        profile.enabled = false;
+        profile.updated_at += chrono::Duration::seconds(1);
+        vault.put_provider_profile(Actor::user(), &profile)?;
+        assert!(
+            vault
+                .mark_context_packet_dispatched(Actor::system(), &packet.id, Utc::now())
+                .is_err()
+        );
+        profile.enabled = true;
+        profile.updated_at += chrono::Duration::seconds(1);
+        vault.put_provider_profile(Actor::user(), &profile)?;
         let dispatched =
             vault.mark_context_packet_dispatched(Actor::system(), &packet.id, Utc::now())?;
         assert!(dispatched.dispatched_at.is_some());

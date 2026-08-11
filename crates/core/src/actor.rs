@@ -27,6 +27,8 @@ pub enum Capability {
     BuildContext,
     /// Record a derived session summary.
     RecordSessionSummary,
+    /// Create, append to, or close a user-owned reflection session.
+    ManageSession,
     /// Propose an event for human review.
     ProposeEvent,
     /// Confirm or reject a proposed event.
@@ -35,6 +37,8 @@ pub enum Capability {
     ProposeClaim,
     /// Propose an open question.
     ProposeOpenQuestion,
+    /// Accept, answer, or close an open question.
+    ReviewOpenQuestion,
     /// Propose a behavioral experiment.
     ProposeExperiment,
     /// Propose counterevidence without applying it to a claim projection.
@@ -49,6 +53,8 @@ pub enum Capability {
     DeleteData,
     /// Export the full vault.
     ExportAll,
+    /// Import a validated full-vault portable artifact.
+    ImportAll,
     /// Change privacy and consent policy.
     ChangePrivacyPolicy,
     /// Change encryption or key-management settings.
@@ -156,9 +162,11 @@ mod tests {
         let actor = Actor::model_host();
         assert!(actor.allows(Capability::ProposeClaim));
         assert!(actor.allows(Capability::AddCounterevidence));
+        assert!(!actor.allows(Capability::ReviewOpenQuestion));
         assert!(!actor.allows(Capability::ReviewClaim));
         assert!(!actor.allows(Capability::DeleteData));
         assert!(!actor.allows(Capability::ExportAll));
+        assert!(!actor.allows(Capability::ImportAll));
         assert!(!actor.allows(Capability::ChangePrivacyPolicy));
         assert!(!actor.allows(Capability::ManageEncryption));
     }

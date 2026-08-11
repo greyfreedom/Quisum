@@ -4,7 +4,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    DomainError, EntityId, EntityKind, Sensitivity, Source, Validate, validation::validate_text,
+    Actor, ActorKind, Capability, DomainError, EntityId, EntityKind, Sensitivity, Source, Validate,
+    validation::validate_text,
 };
 
 /// Lifecycle for an unresolved question.
@@ -49,6 +50,28 @@ pub struct OpenQuestion {
 }
 
 impl OpenQuestion {
+    /// Create an unresolved candidate. Model-originated candidates remain proposed until review.
+    #[must_use]
+    pub fn proposal(
+        question: impl Into<String>,
+        sensitivity: Sensitivity,
+        source: Source,
+        now: DateTime<Utc>,
+    ) -> Self {
+        Self {
+            schema_version: "1.0.0".to_owned(),
+            id: EntityId::new(EntityKind::OpenQuestion),
+            question: question.into(),
+            status: OpenQuestionStatus::Proposed,
+            contexts: BTreeSet::new(),
+            related_claims: BTreeSet::new(),
+            sensitivity,
+            crisis_related: false,
+            created_at: now,
+            source,
+        }
+    }
+
     /// Create a user-approved open question from a reviewed claim.
     #[must_use]
     pub fn from_reviewed_claim(
@@ -70,6 +93,34 @@ impl OpenQuestion {
             source: Source::user(),
         }
     }
+
+    /// Apply a human lifecycle decision without turning the question into a claim.
+    pub fn transition(
+        &mut self,
+        actor: Actor,
+        target: OpenQuestionStatus,
+    ) -> Result<(), DomainError> {
+        actor.require(Capability::ReviewOpenQuestion)?;
+        if actor.kind() != ActorKind::User {
+            return Err(DomainError::Forbidden(Capability::ReviewOpenQuestion));
+        }
+        let allowed = matches!(
+            (self.status, target),
+            (OpenQuestionStatus::Proposed, OpenQuestionStatus::Open)
+                | (OpenQuestionStatus::Proposed, OpenQuestionStatus::Closed)
+                | (OpenQuestionStatus::Open, OpenQuestionStatus::Answered)
+                | (OpenQuestionStatus::Open, OpenQuestionStatus::Closed)
+        );
+        if !allowed {
+            return Err(DomainError::InvalidValue("open_question.transition"));
+        }
+        self.validate()?;
+        let mut updated = self.clone();
+        updated.status = target;
+        updated.validate()?;
+        *self = updated;
+        Ok(())
+    }
 }
 
 impl Validate for OpenQuestion {
@@ -90,5 +141,50 @@ impl Validate for OpenQuestion {
         }
         self.source.validate()?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use chrono::Utc;
+
+    use super::*;
+
+    #[test]
+    fn only_the_user_can_advance_the_open_question_lifecycle() {
+        let mut question = OpenQuestion::proposal(
+            "Could this pattern depend on the current context?",
+            Sensitivity::Private,
+            Source::model(
+                "pattern-validation@1.0.0",
+                "synthetic-provider",
+                "synthetic-model",
+                EntityId::new(EntityKind::Context),
+            ),
+            Utc::now(),
+        );
+
+        assert!(matches!(
+            question.transition(Actor::model_host(), OpenQuestionStatus::Open),
+            Err(DomainError::Forbidden(Capability::ReviewOpenQuestion))
+        ));
+        assert_eq!(question.status, OpenQuestionStatus::Proposed);
+
+        assert!(
+            question
+                .transition(Actor::user(), OpenQuestionStatus::Open)
+                .is_ok()
+        );
+        assert!(
+            question
+                .transition(Actor::user(), OpenQuestionStatus::Answered)
+                .is_ok()
+        );
+        assert_eq!(question.status, OpenQuestionStatus::Answered);
+        assert!(
+            question
+                .transition(Actor::user(), OpenQuestionStatus::Open)
+                .is_err()
+        );
     }
 }

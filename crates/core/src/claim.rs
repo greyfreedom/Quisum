@@ -633,6 +633,22 @@ pub struct UserReview {
     pub reviewed_at: DateTime<Utc>,
 }
 
+impl Validate for UserReview {
+    fn validate(&self) -> Result<(), DomainError> {
+        if self.schema_version != "1.0.0" {
+            return Err(DomainError::InvalidValue("review.schema_version"));
+        }
+        self.id.require_kind(EntityKind::Review)?;
+        self.claim_id.require_kind(EntityKind::Claim)?;
+        ReviewRequest {
+            decision: self.decision,
+            edited_statement: self.edited_statement.clone(),
+            note: self.note.clone(),
+        }
+        .validate()
+    }
+}
+
 /// Reason for a claim revision.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -701,6 +717,44 @@ pub struct ClaimRevision {
     pub reason: String,
     /// Revision time.
     pub created_at: DateTime<Utc>,
+}
+
+impl Validate for ClaimRevision {
+    fn validate(&self) -> Result<(), DomainError> {
+        self.id.require_kind(EntityKind::Revision)?;
+        self.claim_id.require_kind(EntityKind::Claim)?;
+        validate_snapshot(&self.before)?;
+        validate_snapshot(&self.after)?;
+        if !matches!(self.actor, ActorKind::User | ActorKind::System)
+            || self.reason.trim().is_empty()
+            || self.reason.chars().count() > 500
+            || self.reason.contains(['\r', '\n'])
+        {
+            return Err(DomainError::InvalidValue("revision.metadata"));
+        }
+        Ok(())
+    }
+}
+
+fn validate_snapshot(snapshot: &ClaimSnapshot) -> Result<(), DomainError> {
+    validate_text(&snapshot.statement, 4_000, "revision.statement")?;
+    if snapshot.supporting_evidence.len() > 128
+        || snapshot.counterevidence.len() > 128
+        || snapshot.contexts.len() > 32
+    {
+        return Err(DomainError::InvalidValue("revision.links"));
+    }
+    for evidence in snapshot
+        .supporting_evidence
+        .iter()
+        .chain(snapshot.counterevidence.iter())
+    {
+        validate_evidence_kind(evidence)?;
+    }
+    for context in &snapshot.contexts {
+        validate_text(context, 80, "revision.contexts")?;
+    }
+    Ok(())
 }
 
 /// Complete result of applying a human review.
