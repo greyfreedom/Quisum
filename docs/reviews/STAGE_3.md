@@ -22,7 +22,7 @@ The hostile cases included forged provider/context provenance, invented context 
 | Severity | Finding | Resolution |
 |---|---|---|
 | P1 | Model-derived events, claims, questions, experiments, or messages could be credible only if their caller-supplied provenance was bound to the actual dispatched provider context. | Every model write now resolves an existing dispatched packet and requires exact method, model, provider identity, eligible evidence, and packet membership; assistant turns also require the immediately preceding matching user query. |
-| P1 | Context packets could otherwise preserve forged/stale excerpts or use a provider whose trust settings changed before dispatch. | Persistence resolves every item against its current reviewed/active projection and exact deterministic excerpt. Dispatch atomically rechecks the enabled profile, model, query sensitivity, item sensitivities, approval, and policy. |
+| P1 | Context packets could otherwise preserve forged/stale excerpts, dispatch a record deleted after preview, or use a provider whose trust settings changed before dispatch. | Persistence and final dispatch both resolve every item against its current reviewed/active projection and exact deterministic excerpt. Dispatch atomically rechecks those records plus the enabled profile, model, query sensitivity, item sensitivities, approval, and policy. |
 | P1 | A streamed response could expose deltas before discovering unsafe text, a truncated terminal state, or invalid structured output. | SSE is read incrementally but deltas remain buffered until the complete response passes size, terminal-state, local safety, and optional JSON Schema validation. Redirects and ambient proxies are disabled. |
 | P1 | Imported records could forge provider provenance, human-confirmed model claims, claim histories, assistant ordering, or context excerpts while remaining individually schema-valid. | Import now validates the complete cross-record graph, reconstructs append-only claim revision chains, pairs human reviews one-to-one with semantic transitions, binds context excerpts and evidence, and rejects branches, gaps, duplicates, deleted/crisis records, and unsupported projections. |
 | P1 | Raw portable insertion and MCP context construction could bypass the runtime crisis/overclaim/dependency safety gates. | Import replays user-input or generated-output safety checks by source actor, and MCP context construction performs the same pre-retrieval crisis/third-party routing as CLI. Regression tests cover both bypasses. |
@@ -52,7 +52,7 @@ cargo test --workspace --all-features
   7 schema/fixture/runtime contract tests
   5 MCP tests
   10 provider protocol tests
-  53 encrypted Vault/recovery/portability tests
+  54 encrypted Vault/recovery/portability tests
   all doc tests passed
 
 cargo clippy --workspace --all-targets --all-features -- -D warnings
