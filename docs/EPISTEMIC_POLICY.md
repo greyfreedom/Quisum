@@ -35,11 +35,11 @@ A grade is not statistical probability. It describes the evidence set and can de
 
 ```text
 proposed -> pending_review -> confirmed
-                           -> revised -> confirmed
+                           -> revised
                            -> uncertain
                            -> rejected
 
-confirmed -> contradicted | superseded | deprecated | deleted
+confirmed | revised -> contradicted | superseded | deprecated | deleted
 ```
 
 Only a human-authorized surface may create the transition to `confirmed`, `revised`, `rejected`, `deprecated`, or `deleted`. Model-facing tools may only propose and add evidence or counterevidence.

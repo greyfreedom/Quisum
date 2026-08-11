@@ -38,10 +38,15 @@
         "vault_locked",
         "migration_applied",
         "session_created",
+        "event_recorded",
+        "event_reviewed",
         "candidate_proposed",
+        "claim_recorded",
         "claim_reviewed",
         "claim_revised",
         "evidence_added",
+        "experiment_reviewed",
+        "correction_recorded",
         "entity_deleted",
         "context_built",
         "context_approved",
@@ -60,8 +65,12 @@
           "enum": [
             "vault",
             "session",
+            "message",
+            "session_summary",
             "event",
             "claim",
+            "revision",
+            "review",
             "correction",
             "open_question",
             "experiment",
@@ -69,8 +78,10 @@
             "context_packet",
             "provider",
             "consent",
+            "audit",
             "export",
-            "backup"
+            "backup",
+            "import"
           ]
         },
         {

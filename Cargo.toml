@@ -25,3 +25,17 @@ dbg_macro = "deny"
 todo = "deny"
 unwrap_used = "deny"
 expect_used = "deny"
+
+[workspace.dependencies]
+chrono = { version = "0.4.45", default-features = false, features = ["clock", "serde", "std"] }
+getrandom = "0.4.3"
+hex = "0.4.3"
+parking_lot = "0.12.5"
+rusqlite = { version = "0.40.1", default-features = false, features = ["backup", "bundled-sqlcipher-vendored-openssl", "chrono", "limits", "modern_sqlite", "serde_json"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+sha2 = "0.11.0"
+tempfile = "3.23.0"
+thiserror = "2.0.19"
+ulid = { version = "3.0.0", features = ["serde"] }
+zeroize = { version = "1.9.0", features = ["derive"] }

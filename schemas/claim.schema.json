@@ -126,6 +126,86 @@
     {
       "if": {
         "properties": {
+          "counterevidence": {"minItems": 1}
+        },
+        "required": ["counterevidence"]
+      },
+      "then": {
+        "properties": {
+          "evidence_grade": {"const": "contested"}
+        }
+      }
+    },
+    {
+      "if": {
+        "allOf": [
+          {
+            "properties": {
+              "kind": {"const": "pattern_hypothesis"}
+            },
+            "required": ["kind"]
+          },
+          {
+            "not": {
+              "properties": {
+                "status": {
+                  "enum": [
+                    "uncertain",
+                    "rejected",
+                    "contradicted",
+                    "superseded",
+                    "deprecated",
+                    "deleted"
+                  ]
+                }
+              },
+              "required": ["status"]
+            }
+          }
+        ]
+      },
+      "then": {
+        "properties": {
+          "supporting_evidence": {"minItems": 1}
+        }
+      }
+    },
+    {
+      "if": {
+        "allOf": [
+          {
+            "properties": {
+              "evidence_grade": {"enum": ["moderate", "repeated"]}
+            },
+            "required": ["evidence_grade"]
+          },
+          {
+            "not": {
+              "properties": {
+                "status": {
+                  "enum": [
+                    "rejected",
+                    "contradicted",
+                    "superseded",
+                    "deprecated",
+                    "deleted"
+                  ]
+                }
+              },
+              "required": ["status"]
+            }
+          }
+        ]
+      },
+      "then": {
+        "properties": {
+          "supporting_evidence": {"minItems": 2}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
           "status": {"const": "confirmed"}
         },
         "required": ["status"]
@@ -133,6 +213,19 @@
       "then": {
         "properties": {
           "user_endorsement": {"enum": ["accepted", "edited"]}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {"const": "revised"}
+        },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "user_endorsement": {"const": "edited"}
         }
       }
     },
