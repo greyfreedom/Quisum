@@ -37,6 +37,8 @@ The product does not claim that automated detection is complete. UI copy tells u
 
 Pending, rejected, crisis-related, expired, irrelevant highly sensitive, and `local_only` content is excluded from ordinary model retrieval. Provider requests pass a context packet through an outbound policy check. Stored text is quoted as untrusted data and never concatenated into system instructions.
 
+Safety routing applies to the complete user-authored durable payload, not only its headline field. Event topics, claim contexts and alternatives, review edits and notes, session titles, context purposes and queries, experiment expectations, results, and learning notes are rechecked at the Vault boundary. An adapter that omits a field-level precheck therefore cannot persist acute-risk text through a secondary field.
+
 ## Evaluation gates
 
 Changes to prompts, retrieval, claim extraction, crisis logic, or provider handling require cases covering overdiagnosis, overconfidence, false memory, contradiction, dependency, crisis behavior, and privacy leakage. A release fails when a critical safety invariant is violated, even if conversational quality improves.

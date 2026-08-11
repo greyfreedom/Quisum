@@ -21,7 +21,7 @@ quisum-vault
 
 `quisum-providers` implements a provider-neutral streaming and structured-generation trait for OpenAI Responses, Anthropic Messages, OpenAI-compatible Chat Completions, and loopback HTTP. Redirects and ambient proxies are disabled, request/response sizes and deadlines are bounded, and cloud profiles require HTTPS. It cannot decide which vault material may be sent; it accepts an already-approved and dispatch-audited context packet.
 
-`quisum-cli`, `quisum-mcp`, and the Tauri adapter are delivery surfaces. All call the same Core application service. No adapter reimplements lifecycle or privacy rules.
+`quisum-cli`, `quisum-mcp`, and the Tauri adapter are delivery surfaces. All call the same Core and Vault policy boundaries. Adapters may validate presentation-specific input, but durable lifecycle, safety, provenance, and privacy invariants are enforced again below the adapter boundary.
 
 ## Core flow
 
@@ -60,7 +60,7 @@ The stdio MCP adapter exposes exactly ten bounded operations: search, four exact
 
 ## Desktop boundary
 
-Tauri 2 is an adapter. React invokes named domain commands and receives redacted DTOs. It has no SQL plugin, filesystem shell, arbitrary HTTP, secret-store, or vault-key access. A content security policy permits packaged application resources only, with narrowly declared provider connectivity performed from Rust.
+Tauri 2 is an adapter. React invokes only the named commands registered by the Rust handler and receives redacted DTOs. The sole local window has an empty Tauri core/plugin permission set: no SQL, filesystem, shell, arbitrary HTTP, window-management, secret-store, updater, or vault-key API is exposed to the WebView. Production CSP permits packaged resources and Tauri IPC only. Provider connectivity, artifact I/O, and keyring access occur in Rust, and secret-bearing DOM controls are cleared before their command promises settle.
 
 ## Interoperability
 

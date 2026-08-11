@@ -78,6 +78,7 @@ impl QuisumMcpServer {
         &self,
         Parameters(input): Parameters<SearchInput>,
     ) -> Result<Json<ToolOutput>, String> {
+        require_bounded_text(&input.query, 500)?;
         let limit = input.limit.unwrap_or(12).min(50);
         let results = self
             .vault
