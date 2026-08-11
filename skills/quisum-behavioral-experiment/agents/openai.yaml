@@ -1,0 +1,4 @@
+interface:
+  display_name: "Quisum Behavioral Experiment"
+  short_description: "Design a bounded reversible test of a hypothesis"
+  default_prompt: "Use $quisum-behavioral-experiment to design a safe small experiment."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Quisum Pattern Validation"
+  short_description: "Test a possible pattern against evidence and exceptions"
+  default_prompt: "Use $quisum-pattern-validation to test a recurring pattern carefully."

@@ -317,6 +317,16 @@ fn crisis_resource_pack_matches_its_public_schema() -> Result<(), Box<dyn Error>
 }
 
 #[test]
+fn release_readiness_matches_its_public_schema() -> Result<(), Box<dyn Error>> {
+    let schemas = load_schemas()?;
+    let registry = registry(&schemas)?;
+    let root = workspace_root();
+    let schema = read_json(&root.join("schemas/release-readiness.schema.json"))?;
+    let readiness = read_json(&root.join("release/readiness.json"))?;
+    assert_valid(&schema, &readiness, &registry)
+}
+
+#[test]
 fn schemas_enforce_epistemic_and_privacy_boundaries() -> Result<(), Box<dyn Error>> {
     let schemas = load_schemas()?;
     let registry = registry(&schemas)?;

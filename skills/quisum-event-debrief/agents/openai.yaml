@@ -1,0 +1,4 @@
+interface:
+  display_name: "Quisum Event Debrief"
+  short_description: "Debrief one event into facts, feelings, and options"
+  default_prompt: "Use $quisum-event-debrief to review a concrete event with me."

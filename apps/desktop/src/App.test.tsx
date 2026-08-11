@@ -14,7 +14,7 @@ vi.mock("./api", () => ({
 
 const baseStatus: AppStatus = {
   product: "Quisum",
-  version: "0.1.0",
+  version: "1.0.0-rc.1",
   vaultExists: false,
   recoveryExists: false,
   unlocked: false,
