@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { command, failureMessage } from "../api";
+import { command, failureGuidance, failureMessage, type CrisisGuidance } from "../api";
 import {
   EmptyState,
   Field,
@@ -45,6 +45,7 @@ export function ExplorePage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string>();
+  const [crisisGuidance, setCrisisGuidance] = useState<CrisisGuidance>();
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -76,6 +77,7 @@ export function ExplorePage() {
     const form = new FormData(event.currentTarget);
     setBusy(true);
     setAnswer(undefined);
+    setCrisisGuidance(undefined);
     try {
       const nextPacket = await command<ContextPacket>("context_preview", {
         providerId: valueOf(form, "providerId"),
@@ -84,11 +86,16 @@ export function ExplorePage() {
         query: valueOf(form, "query"),
         querySensitivity: valueOf(form, "querySensitivity") as Sensitivity,
         maximumItems: Number(valueOf(form, "maximumItems")),
+        region: navigator.language || null,
       });
       setPacket(nextPacket);
       setNotice("Context preview built locally. Nothing has been sent to the provider.");
     } catch (error) {
-      setNotice(failureMessage(error));
+      const guidance = failureGuidance(error);
+      setCrisisGuidance(guidance);
+      setNotice(guidance === undefined
+        ? failureMessage(error)
+        : "Quisum stopped identity analysis and did not contact the provider.");
     } finally {
       setBusy(false);
     }
@@ -164,6 +171,26 @@ export function ExplorePage() {
         description="Choose a method and provider, inspect the minimum context, then decide whether to send. Memory is quoted data—not instructions."
       />
       {notice !== undefined && <InlineNotice>{notice}</InlineNotice>}
+      {crisisGuidance !== undefined && (
+        <Panel title="Immediate support" className="crisis-guidance">
+          <p>{crisisGuidance.assistantResponse}</p>
+          <p className="secondary-copy">{crisisGuidance.limitations}</p>
+          <div className="item-meta">
+            <span>Resource pack {crisisGuidance.packVersion}</span>
+            <span>Region {crisisGuidance.region}</span>
+            <span>Sources checked {crisisGuidance.sourceCheckedAt}</span>
+            <span>{crisisGuidance.isCurrent ? "Current source check" : "Source check overdue"} · due {crisisGuidance.sourceCheckDue}</span>
+          </div>
+          {crisisGuidance.sourceUrls.length > 0 && (
+            <details>
+              <summary>Authoritative source addresses</summary>
+              <ul className="compact-list">
+                {crisisGuidance.sourceUrls.map((source) => <li key={source}><code>{source}</code></li>)}
+              </ul>
+            </details>
+          )}
+        </Panel>
+      )}
       {loading ? (
         <Loading />
       ) : enabledProviders.length === 0 ? (

@@ -9,6 +9,7 @@ import type { AppStatus, ClaimRecord, ContextPacket, EventRecord } from "./types
 vi.mock("./api", () => ({
   command: vi.fn(),
   failureMessage: (error: unknown) => (error instanceof Error ? error.message : "Local command failed"),
+  failureGuidance: () => undefined,
 }));
 
 const baseStatus: AppStatus = {

@@ -26,12 +26,14 @@ The deterministic safety pre-check and post-check surround all model interaction
 
 1. Stop personality and trauma analysis.
 2. Ask directly and plainly about immediate danger where an interactive response is possible.
-3. Encourage contacting local emergency services and a trusted nearby person.
-4. Display current region-specific resources from a versioned local resource pack.
+3. Encourage contacting local emergency services and a trusted person who can help without putting themselves in danger.
+4. Display source-linked region-specific resources from a versioned local resource pack while its source check is current.
 5. Avoid deep exploration, speculative causes, or promises of confidentiality.
 6. Mark the content crisis-related and exclude it from durable inference.
 
 The product does not claim that automated detection is complete. UI copy tells users it is not an emergency service.
+
+The V1 resource pack covers only explicitly listed regions and otherwise uses a no-number fallback. Desktop selection is inferred from the app locale, not physical location, so the chosen region can be wrong. Availability is not checked at display time. Once the pack's source-check due date passes, Core suppresses region-specific numbers and uses the generic emergency-services fallback until maintainers verify and version the sources again. A maintainer source check is not clinical or professional review.
 
 ## Memory safety
 
@@ -42,6 +44,8 @@ Safety routing applies to the complete user-authored durable payload, not only i
 ## Evaluation gates
 
 Changes to prompts, retrieval, claim extraction, crisis logic, or provider handling require cases covering overdiagnosis, overconfidence, false memory, contradiction, dependency, crisis behavior, and privacy leakage. A release fails when a critical safety invariant is violated, even if conversational quality improves.
+
+`quisum-eval` executes all repository cases. Its offline mode verifies deterministic policy and the assertion harness only. Provider compatibility requires a complete, timestamped result set for one exact adapter, model, capability class, and prompt bundle; results never transfer to another model or version.
 
 ## Professional review
 

@@ -307,6 +307,16 @@ fn eval_cases_match_their_schema() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn crisis_resource_pack_matches_its_public_schema() -> Result<(), Box<dyn Error>> {
+    let schemas = load_schemas()?;
+    let registry = registry(&schemas)?;
+    let root = workspace_root();
+    let schema = read_json(&root.join("schemas/crisis-resource-pack.schema.json"))?;
+    let pack = read_json(&root.join("resources/crisis/v1.0.0.json"))?;
+    assert_valid(&schema, &pack, &registry)
+}
+
+#[test]
 fn schemas_enforce_epistemic_and_privacy_boundaries() -> Result<(), Box<dyn Error>> {
     let schemas = load_schemas()?;
     let registry = registry(&schemas)?;

@@ -5,6 +5,7 @@ members = [
   "crates/core",
   "crates/vault",
   "crates/providers",
+  "crates/evals",
   "crates/mcp",
   "crates/cli",
 ]
@@ -41,6 +42,7 @@ getrandom = "0.4.3"
 hex = "0.4.3"
 keyring = { version = "4.1.5", default-features = false, features = ["v1"] }
 parking_lot = "0.12.5"
+regex = "1.12.3"
 reqwest = { version = "0.13.4", default-features = false, features = ["charset", "http2", "json", "rustls", "stream"] }
 rpassword = "7.4.0"
 rmcp = { version = "2.2.0", default-features = false, features = ["macros", "schemars", "server", "transport-io"] }

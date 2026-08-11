@@ -17,6 +17,8 @@ quisum-vault
 
 `quisum-core` contains domain types, authorization, claim state transitions, safety screening, retrieval eligibility, context-packet construction, and import/export contracts. It has no dependency on Tauri, MCP transport, provider HTTP protocols, or SQLite.
 
+The versioned crisis resource pack is embedded into Core so CLI and desktop use the same deterministic route, provenance, freshness cutoff, and no-number fallback without a network request. Locale-based region selection is advisory and never enters a provider context packet.
+
 `quisum-vault` implements Core repository traits with SQLCipher, ordered migrations, transactional projections, audit append, backup, and restore.
 
 `quisum-providers` implements a provider-neutral streaming and structured-generation trait for OpenAI Responses, Anthropic Messages, OpenAI-compatible Chat Completions, and loopback HTTP. Redirects and ambient proxies are disabled, request/response sizes and deadlines are bounded, and cloud profiles require HTTPS. It cannot decide which vault material may be sent; it accepts an already-approved and dispatch-audited context packet.
@@ -39,6 +41,8 @@ input
 ```
 
 Provider failure, truncated terminal state, unsafe generated language, or invalid structured output ends without persisting a candidate. Streaming transport is consumed incrementally, but text deltas are released to product surfaces only after the complete response passes terminal-state, size, safety, and optional JSON Schema validation. The product never “repairs” arbitrary invalid JSON into a durable identity claim.
+
+`quisum-eval` is a separate executable adapter over Core and declarative cases. Offline mode is a deterministic CI gate. Provider-result mode accepts one bounded strict JSONL run and binds its report to exact provider and prompt metadata; neither mode can mutate a vault.
 
 ## Storage model
 

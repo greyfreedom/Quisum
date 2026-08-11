@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quisum.org/schemas/eval-result.schema.json",
+  "title": "Quisum provider evaluation result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "case_id",
+    "provider",
+    "prompt_bundle_version",
+    "evaluated_at",
+    "result"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0.0" },
+    "case_id": { "type": "string", "pattern": "^eval_[a-z0-9_]+$" },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["adapter", "model_identifier", "capability_class"],
+      "properties": {
+        "adapter": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "model_identifier": { "type": "string", "minLength": 1, "maxLength": 240 },
+        "capability_class": {
+          "type": "string",
+          "enum": ["cloud_text", "cloud_structured", "local_text", "local_structured"]
+        }
+      }
+    },
+    "prompt_bundle_version": { "type": "string", "minLength": 1, "maxLength": 120 },
+    "evaluated_at": { "type": "string", "format": "date-time" },
+    "result": { "type": "object" }
+  }
+}

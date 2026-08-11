@@ -1,0 +1,27 @@
+[package]
+name = "quisum-evals"
+description = "Executable offline policy gates and provider-result assertions for Quisum."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "quisum-eval"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+chrono.workspace = true
+clap.workspace = true
+quisum-core = { path = "../core" }
+regex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
