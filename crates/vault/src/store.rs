@@ -148,6 +148,7 @@ impl SqlCipherVault {
         let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let mut packet = load_context_packet(&transaction, packet_id)?;
         require_context_provider_policy(&transaction, &packet)?;
+        require_context_items_eligible(&transaction, &packet)?;
         packet.mark_dispatched(actor, dispatched_at)?;
         update_context_packet(&transaction, &packet)?;
         let audit = AuditEvent::new(
@@ -2533,6 +2534,57 @@ mod tests {
                 "context.item_excerpt"
             )))
         ));
+        Ok(())
+    }
+
+    #[test]
+    fn context_dispatch_rejects_an_item_deleted_after_preview() -> Result<(), Box<dyn Error>> {
+        let (_directory, _key, vault) = test_vault()?;
+        let event = insert_confirmed_event(&vault, "Synthetic expiring preview")?;
+        let profile = test_provider(&vault, BTreeSet::from([Sensitivity::Private]))?;
+        let packet = ContextBuilder::new(1)?.build(
+            Actor::system(),
+            "Synthetic deletion race",
+            "event-debrief@1.0.0",
+            profile.id,
+            profile.model,
+            "Synthetic query",
+            Sensitivity::Private,
+            vec![MemoryCandidate {
+                item_type: ContextItemType::Event,
+                item_id: event.id.clone(),
+                excerpt: crate::retrieval::context_excerpt(&format!(
+                    "{}\n{}",
+                    event.title,
+                    event.facts.join("\n")
+                )),
+                sensitivity: event.sensitivity,
+                state: MemoryState::Confirmed,
+                crisis_related: false,
+                relevant: true,
+                policy_allowed: true,
+                selection_reason: "Synthetic direct relevance.".to_owned(),
+                relevance_score: 100,
+                recorded_at: event.recorded_at,
+            }],
+            Utc::now(),
+        )?;
+        vault.insert_context_packet(Actor::system(), &packet)?;
+        vault.delete_event(Actor::user(), &event.id, Utc::now())?;
+
+        assert!(matches!(
+            vault.mark_context_packet_dispatched(Actor::system(), &packet.id, Utc::now()),
+            Err(VaultError::Domain(quisum_core::DomainError::InvalidValue(
+                "context.item_eligibility"
+            )))
+        ));
+        let payload = vault.connection.lock().query_row(
+            "SELECT payload_json FROM context_packets WHERE id = ?1",
+            [packet.id.to_string()],
+            |row| row.get::<_, String>(0),
+        )?;
+        let stored: ContextPacket = serde_json::from_str(&payload)?;
+        assert!(stored.dispatched_at.is_none());
         Ok(())
     }
 
