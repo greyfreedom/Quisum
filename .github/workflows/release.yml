@@ -46,7 +46,7 @@ jobs:
       - name: Install Linux desktop prerequisites
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
       # actions/setup-node v6
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: 22.13.0
           cache: npm
@@ -139,7 +139,7 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
       # actions/setup-node v6
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: 22.13.0
           cache: npm
@@ -197,7 +197,7 @@ jobs:
       # actions/checkout v7
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       # actions/setup-node v6
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: 22.13.0
       # dtolnay/rust-toolchain stable, pinned 2026-08-12
@@ -258,7 +258,7 @@ jobs:
       # actions/checkout v7
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       # actions/setup-node v6
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: 22.13.0
       - name: Download all draft assets
