@@ -45,7 +45,7 @@ parking_lot = "0.12.5"
 regex = "1.12.3"
 reqwest = { version = "0.13.4", default-features = false, features = ["charset", "http2", "json", "rustls", "stream"] }
 rpassword = "7.4.0"
-rmcp = { version = "2.2.0", default-features = false, features = ["macros", "schemars", "server", "transport-io"] }
+rmcp = { version = "3.1.4", default-features = false, features = ["macros", "schemars", "server", "transport-io"] }
 rusqlite = { version = "0.40.1", default-features = false, features = ["backup", "bundled-sqlcipher-vendored-openssl", "chrono", "limits", "modern_sqlite", "serde_json"] }
 schemars = "1.2.1"
 secrecy = "0.10.3"
