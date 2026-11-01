@@ -57,7 +57,7 @@ jobs:
           toolchain: 1.88.0
           components: rustfmt, clippy
       # Swatinem/rust-cache v2
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0
       - run: npm ci --prefix apps/desktop
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
@@ -150,7 +150,7 @@ jobs:
           toolchain: 1.88.0
           targets: ${{ matrix.rust_targets }}
       # Swatinem/rust-cache v2
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0
       - run: npm ci --prefix apps/desktop
       # tauri-apps/tauri-action v1
       - uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f
@@ -206,7 +206,7 @@ jobs:
           toolchain: 1.88.0
           targets: ${{ matrix.rust_target }}
       # Swatinem/rust-cache v2
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0
       - name: Build CLI
         shell: bash
         env:
